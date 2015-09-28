@@ -15,6 +15,8 @@
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
 # USA
 
+import os
+import re
 import sys
 import binascii
 import random
@@ -22,6 +24,9 @@ import subprocess
 import struct
 import fcntl
 import dpkt
+import urllib2
+import ConfigParser
+import config
 from socket import *
 
 # console colors
@@ -47,6 +52,14 @@ def binary_to_string(binary):
 	""" convert binary to string """
 	return binascii.hexlify(binary)
 
+def set_ip_forward(fwd):
+	""" set ip_forward to fwd (0 or 1) """
+	if fwd != 1 and fwd != 0:
+		raise ValueError('[.] Value not valid for ip_forward, must be either 0 or 1')
+	else:
+		with open(config.ip_forward, 'w') as ip_f:
+			ip_f.write(str(fwd) + '\n')
+
 def get_default_gateway_linux():
     """Read the default gateway directly from /proc."""
     with open("/proc/net/route") as fh:
@@ -66,22 +79,31 @@ def get_mac_addr(dev):
 
 def parse_mac(address):
 	""" remove colon inside mac addres, if there's any """
-	if len(address) == 12:
-		return address
-	elif len(address) == 17:
-		return address.replace(':', '')
-	else:
-		raise ValueError('[!] Malformed MAC address')
+	return address.replace(':', '')
 
-def fake_mac_address():
+def mac_to_hex(mac):
+	""" convert string mac octets into base 16 int """
+	return [int(x, 16) for x in mac.split(':')]
+
+def fake_mac_address(prefix = [], mode = None):
 	""" generate a fake MAC address """
-	prefix = [(random.randint(0x00, 0x7f)) for p in xrange(6)]
+	if mode == 1:
+		prefix = [0x00, 0x16, 0x3e]
+		prefix += [(random.randint(0x00, 0x7f)) for p in xrange(3)]
+	else:
+		prefix += [(random.randint(0x00, 0xff)) for p in xrange(6 - len(prefix))]
 	return ':'.join('%02x' % x for x in prefix)
 
 def change_mac(dev, new_mac):
 	""" try to change the MAC address associated to the device """
-	subprocess.check_call(["ifconfig", "%s" % dev, "up"])
-	subprocess.check_call(["ifconfig", "%s" % dev, "hw", "ether", "%s" % new_mac])
+	os.system("ifconfig " + dev + " down")
+	os.system("ifconfig " + dev + " hw ether " + new_mac)
+	os.system("ifconfig " + dev + " up")
+	os.system(config.NETWORK_RESTART + " restart")
+	# subprocess.check_call(["ifconfig", "%s" % dev, "down"], shell = True)
+	# subprocess.check_call(["ifconfig", "%s" % dev, "hw", "ether", "%s" % new_mac], shell = True)
+	# subprocess.check_call(["ifconfig", "%s" % dev, "up"], shell = True)
+	# subprocess.check_call([config.NETWORK_RESTART, "restart"], shell = True)
 
 def eth_ntoa(buf):
 	""" convert a MAC address from binary packed bytes to string format """
@@ -118,3 +140,53 @@ def build_arp_packet(source_mac, src = None, dst = None):
 	packet.type = dpkt.ethernet.ETH_TYPE_ARP
 	return packet
 
+def get_manufacturer(manufacturer):
+	""" get a list of MAC octets based on manufacturer"""
+	output = []
+	m_list = None
+	if not os.path.exists("./manufacturers"):
+		os.makedirs("./manufacturers")
+	if not os.path.isfile("./manufacturers/list.txt"):
+		try:
+			u = urllib2.urlopen(config.MANUFACTURER_URL)
+			m_list = open("./manufacturers/list.txt", "w+r")
+			for line in u:
+				try:
+					mac = line.split()[0]
+					man = line.split()[1]
+					if re.search(manufacturer.lower(), man.lower()) and len(mac) < 17 and len(mac) > 1:
+						output.append(mac)
+				except IndexError:
+					pass
+			if len(output) > 0:
+				m_list.write("[" + manufacturer.lower() + "]\nMAC = ")
+				m_list.write(",".join(output))
+				m_list.write("\n")
+		except:
+			print "!"
+			sys.exit(0)
+	else:
+		macs = []
+		conf = ConfigParser.ConfigParser()
+		conf.read("./manufacturers/list.txt")
+		try:
+			macs = conf.get(manufacturer.lower(), 'MAC').split(',')
+			if len(macs) > 0:
+				return macs
+		except:
+			u = urllib2.urlopen(config.MANUFACTURER_URL)
+			m_list = open("./manufacturers/list.txt", "a+r")
+			for line in u:
+				try:
+					mac = line.split()[0]
+					man = line.split()[1]
+					if re.search(manufacturer.lower(), man.lower()) and len(mac) < 17 and len(mac) > 1:
+						output.append(mac)
+				except IndexError:
+					pass
+			if len(output):
+				m_list.write("[" + manufacturer.lower() + "]\nMAC = ")
+				m_list.write(",".join(output))
+				m_list.write("\n")
+	m_list.close()
+	return output
