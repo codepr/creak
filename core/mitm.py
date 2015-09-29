@@ -15,7 +15,11 @@
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
 # USA
 
-import dnet
+try:
+	import dnet
+except ImportError:
+	print "[!] Missing module dnet, DNS spoofing (-2 options) won't work"
+	pass
 import pcap
 import dpkt
 import time

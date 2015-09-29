@@ -5,6 +5,16 @@ performing an ARP poison attack and sending reset TCP packets to every request
 made to the router.
 Born as a didactic project for learning python language, i decline every responsibility for any abuse.
 
+## Installation
+
+```
+git clone https://github.com/codepr/creak.git
+```
+It is required to have installed pcap libraries for raw packet manipulations
+and dpkt module, for dns spoofing options is required to have installed dnet
+module from libdnet package, do not confuse it with pydnet (network evaluation
+tool) module.
+
 ## Options
 
 ```
