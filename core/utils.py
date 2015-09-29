@@ -18,6 +18,7 @@
 import os
 import re
 import sys
+import time
 import binascii
 import random
 import subprocess
@@ -76,6 +77,18 @@ def get_mac_addr(dev):
 	info = fcntl.ioctl(s.fileno(), 0x8927,  struct.pack('256s', dev[:15]))
 	s.close()
 	return ''.join(['%02x:' % ord(char) for char in info[18:24]])[:-1]
+
+def get_mac_byip(ip):
+	""" try to retrieve MAC address associated with ip """
+	subprocess.Popen(["ping", "-c 1", ip], stdout = subprocess.PIPE)
+	time.sleep(0.5) # just to be sure of the ping response time
+	pid = subprocess.Popen(["arp", "-n", ip], stdout = subprocess.PIPE)
+	s = pid.communicate()[0]
+	try:
+		mac = re.search(r"(([a-f\d]{1,2}\:){5}[a-f\d]{1,2})", s).groups()[0]
+	except:
+		pass
+	return parse_mac(mac)
 
 def parse_mac(address):
 	""" remove colon inside mac addres, if there's any """

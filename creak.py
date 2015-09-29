@@ -83,7 +83,6 @@ if options.spoof == 1:
 			try:
 				change_mac(args[0], mac_addr)
 				changed = True
-				time.sleep(3)
 			except:
 				pass
 		else:
@@ -97,7 +96,6 @@ if options.spoof == 1:
 				try:
 					change_mac(args[0], mac_addr)
 					changed = True
-					time.sleep(3)
 				except:
 					pass
 			else:
@@ -114,11 +112,16 @@ if options.spoof == 1:
 			try:
 				change_mac(args[0], mac_addr)
 				changed = True
-				time.sleep(3)
 			except:
 				pass
 		else:
 			mac_addr = original_mac_addr
+
+	print "[+] Waiting for wireless reactivation.."
+	if options.mode == 2:
+		time.sleep(10)
+	else:
+		time.sleep(4)
 
 else:
 	if not options.macaddr:
@@ -140,11 +143,11 @@ else:
 		rst_inject(args[0], parse_mac(mac_addr), options.source, options.target, options.port)
 	else:
 		rst_inject(args[0], parse_mac(mac_addr), options.source, options.target)
-	if changed == True:
-		try:
-			time.sleep(1)
-			print "[+] Resetting MAC address to original value " + G + original_mac_addr + W + " for device " + G + args[0] + W
-			change_mac(args[0], original_mac_addr)
-		except:
-			pass
+if changed == True:
+	try:
+		time.sleep(1)
+		print "[+] Resetting MAC address to original value " + G + original_mac_addr + W + " for device " + G + args[0] + W
+		change_mac(args[0], original_mac_addr)
+	except:
+		pass
 

