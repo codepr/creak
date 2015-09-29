@@ -1,0 +1,25 @@
+# 0.0.2 - 2015-09-29
+
+## Added
+
+- DNS spoofing
+- Manufacturer based mac spoof
+- Basic scan mode for active sessions on target machine
+
+## Changed
+
+- Random mac address generation
+- Better arp poison system, delay added
+
+## Fixed
+
+- Mac address spoofing
+
+# 0.0.1 - 2015-09-24
+
+## Added
+
+Initial release.
+
+- MITM attack and RST injection through switched networks
+- MAC address spoofing

