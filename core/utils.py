@@ -96,10 +96,6 @@ def fake_mac_address(prefix = [], mode = None):
 
 def change_mac(dev, new_mac):
 	""" try to change the MAC address associated to the device """
-	# os.system("ifconfig " + dev + " down")
-	# os.system("ifconfig " + dev + " hw ether " + new_mac)
-	# os.system("ifconfig " + dev + " up")
-	# os.system(config.NETWORK_RESTART + " restart")
 	subprocess.check_call(["ifconfig", "%s" % dev, "down"])
 	subprocess.check_call(["ifconfig", "%s" % dev, "hw", "ether", "%s" % new_mac])
 	subprocess.check_call(["ifconfig", "%s" % dev, "up"])
@@ -141,7 +137,10 @@ def build_arp_packet(source_mac, src = None, dst = None):
 	return packet
 
 def get_manufacturer(manufacturer):
-	""" get a list of MAC octets based on manufacturer"""
+	"""
+	get a list of MAC octets based on manufacturer fetching data from
+	http://anonsvn.wireshark.org/wireshark/trunk/manuf
+	"""
 	output = []
 	m_list = None
 	if not os.path.exists("./manufacturers"):
