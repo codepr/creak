@@ -118,7 +118,7 @@ if options.spoof == 1:
 			mac_addr = original_mac_addr
 
 	print "[+] Waiting for wireless reactivation.."
-	if options.mode == 2:
+	if options.mode == 1 or options.mode == 2:
 		time.sleep(10)
 	else:
 		time.sleep(4)

