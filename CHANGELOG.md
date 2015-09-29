@@ -1,23 +1,23 @@
-# 0.0.2 - 2015-09-29
+## 0.0.2 - 2015-09-29
 
-## Added
+### Added
 
 - DNS spoofing
 - Manufacturer based mac spoof
 - Basic scan mode for active sessions on target machine
 
-## Changed
+### Changed
 
 - Random mac address generation
 - Better arp poison system, delay added
 
-## Fixed
+### Fixed
 
 - Mac address spoofing
 
 # 0.0.1 - 2015-09-24
 
-## Added
+### Added
 
 Initial release.
 
