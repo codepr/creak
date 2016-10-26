@@ -27,44 +27,44 @@ import fcntl
 import dpkt
 import urllib2
 import ConfigParser
+from socket import socket, inet_aton, inet_ntoa, AF_INET, SOCK_DGRAM
 import config
-from socket import *
 
 # console colors
-W = '\033[0m' # white (normal)
+W = '\033[0m'  # white (normal)
 R = '\033[31m' # red
 G = '\033[32m' # green
 
 def print_counter(counter):
-	""" print counter in place """
-	sys.stdout.write("[+] Packets [ %d ]\r" % counter)
-	sys.stdout.flush()
+    """ print counter in place """
+    sys.stdout.write("[+] Packets [ %d ]\r" % counter)
+    sys.stdout.flush()
 
 def print_in_line(string):
-	""" print without carriage return """
-	sys.stdout.write(string)
-	sys.stdout.flush()
+    """ print without carriage return """
+    sys.stdout.write(string)
+    sys.stdout.flush()
 
 def string_to_binary(string):
-	""" convert string to binary format """
-	return binascii.unhexlify(string)
+    """ convert string to binary format """
+    return binascii.unhexlify(string)
 
 def binary_to_string(binary):
-	""" convert binary to string """
-	return binascii.hexlify(binary)
+    """ convert binary to string """
+    return binascii.hexlify(binary)
 
 def set_ip_forward(fwd):
-	""" set ip_forward to fwd (0 or 1) """
-	if fwd != 1 and fwd != 0:
-		raise ValueError('[.] Value not valid for ip_forward, must be either 0 or 1')
-	else:
-		with open(config.ip_forward, 'w') as ip_f:
-			ip_f.write(str(fwd) + '\n')
+    """ set ip_forward to fwd (0 or 1) """
+    if fwd != 1 and fwd != 0:
+        raise ValueError('[.] Value not valid for ip_forward, must be either 0 or 1')
+    else:
+        with open(config.IP_FORWARD, 'w') as ip_f:
+            ip_f.write(str(fwd) + '\n')
 
 def get_default_gateway_linux():
     """Read the default gateway directly from /proc."""
-    with open("/proc/net/route") as fh:
-        for line in fh:
+    with open("/proc/net/route") as f_h:
+        for line in f_h:
             fields = line.strip().split()
             if fields[1] != '00000000' or not int(fields[3], 16) & 2:
                 continue
@@ -72,136 +72,164 @@ def get_default_gateway_linux():
             return inet_ntoa(struct.pack("<L", int(fields[2], 16)))
 
 def get_mac_addr(dev):
-	""" try to retrieve MAC address associated with device """
-	s = socket(AF_INET, SOCK_DGRAM)
-	info = fcntl.ioctl(s.fileno(), 0x8927,  struct.pack('256s', dev[:15]))
-	s.close()
-	return ''.join(['%02x:' % ord(char) for char in info[18:24]])[:-1]
+    """ try to retrieve MAC address associated with device """
+    sock_fd = socket(AF_INET, SOCK_DGRAM)
+    info = fcntl.ioctl(sock_fd.fileno(), 0x8927, struct.pack('256s', dev[:15]))
+    sock_fd.close()
+    return ''.join(['%02x:' % ord(char) for char in info[18:24]])[:-1]
 
-def get_mac_byip(ip):
-	""" try to retrieve MAC address associated with ip """
-	subprocess.Popen(["ping", "-c 1", ip], stdout = subprocess.PIPE)
-	time.sleep(0.5) # just to be sure of the ping response time
-	pid = subprocess.Popen(["arp", "-n", ip], stdout = subprocess.PIPE)
-	s = pid.communicate()[0]
-	try:
-		mac = re.search(r"(([a-f\d]{1,2}\:){5}[a-f\d]{1,2})", s).groups()[0]
-	except:
-		pass
-	return parse_mac(mac)
+def get_mac_byip(ip_addr):
+    """ try to retrieve MAC address associated with ip """
+    subprocess.Popen(["ping", "-c 1", ip_addr], stdout=subprocess.PIPE)
+    time.sleep(0.5) # just to be sure of the ping response time
+    pid = subprocess.Popen(["arp", "-n", ip_addr], stdout=subprocess.PIPE)
+    arp_output = pid.communicate()[0]
+    try:
+        mac = re.search(r"(([a-f\d]{1,2}\:){5}[a-f\d]{1,2})", arp_output).groups()[0]
+    except IndexError:
+        pass
+    return parse_mac(mac)
 
 def parse_mac(address):
-	""" remove colon inside mac addres, if there's any """
-	return address.replace(':', '')
+    """ remove colon inside mac addres, if there's any """
+    return address.replace(':', '')
 
 def mac_to_hex(mac):
-	""" convert string mac octets into base 16 int """
-	return [int(x, 16) for x in mac.split(':')]
+    """ convert string mac octets into base 16 int """
+    return [int(x, 16) for x in mac.split(':')]
 
-def fake_mac_address(prefix = [], mode = None):
-	""" generate a fake MAC address """
-	if mode == 1:
-		prefix = [0x00, 0x16, 0x3e]
-		prefix += [(random.randint(0x00, 0x7f)) for p in xrange(3)]
-	else:
-		prefix += [(random.randint(0x00, 0xff)) for p in xrange(6 - len(prefix))]
-	return ':'.join('%02x' % x for x in prefix)
+def fake_mac_address(prefix, mode=None):
+    """ generate a fake MAC address """
+    if mode == 1:
+        prefix = [0x00, 0x16, 0x3e]
+        prefix += [(random.randint(0x00, 0x7f)) for p in xrange(3)]
+    else:
+        prefix += [(random.randint(0x00, 0xff)) for p in xrange(6 - len(prefix))]
+    return ':'.join('%02x' % x for x in prefix)
 
 def change_mac(dev, new_mac):
-	""" try to change the MAC address associated to the device """
-	subprocess.check_call(["ifconfig", "%s" % dev, "down"])
-	subprocess.check_call(["ifconfig", "%s" % dev, "hw", "ether", "%s" % new_mac])
-	subprocess.check_call(["ifconfig", "%s" % dev, "up"])
-	subprocess.check_call([config.NETWORK_RESTART, "restart"])
+    """ try to change the MAC address associated to the device """
+    if os.path.exists("/usr/bin/ip") or os.path.exists("/bin/ip"):
+        # turn off device
+        subprocess.check_call("ip", "link", "set", "%s" % dev, "down")
+        # set mac
+        subprocess.check_call("ip", "link", "set", "%s" % dev, "address", "%s" % new_mac)
+        # turn on device
+        subprocess.check_call("ip", "link", "set", "%s" % dev, "up")
+    else:
+        # turn off device
+        subprocess.check_call(["ifconfig", "%s" % dev, "down"])
+        # set mac
+        subprocess.check_call(["ifconfig", "%s" % dev, "hw", "ether", "%s" % new_mac])
+        # turn on device
+        subprocess.check_call(["ifconfig", "%s" % dev, "up"])
+        # restart network
+        if config.NETWORK_RESTART == config.SYSTEMD_NETWORK:
+            subprocess.check_call([config.NETWORK_RESTART])
+        else:
+            subprocess.check_call([config.NETWORK_RESTART, "restart"])
 
 def eth_ntoa(buf):
-	""" convert a MAC address from binary packed bytes to string format """
-	mac_addr = ''
-	for intval in struct.unpack('BBBBBB', buf):
-		if intval > 15:
-			replacestr = '0x'
-		else:
-			replacestr = 'x'
-		mac_addr = ''.join([mac_addr, hex(intval).replace(replacestr, '')])
-	return mac_addr
+    """ convert a MAC address from binary packed bytes to string format """
+    mac_addr = ''
+    for intval in struct.unpack('BBBBBB', buf):
+        if intval > 15:
+            replacestr = '0x'
+        else:
+            replacestr = 'x'
+            mac_addr = ''.join([mac_addr, hex(intval).replace(replacestr, '')])
+
+    return mac_addr
 
 def eth_aton(buf):
-	""" convert a MAC address from string to binary packed bytes format """
-	addr = ''
-	for i in xrange(0, len(buf), 2):
-		addr = ''.join([addr, struct.pack('B', int(buf[i: i + 2], 16))],)
-	return addr
+    """ convert a MAC address from string to binary packed bytes format """
+    addr = ''
+    for i in xrange(0, len(buf), 2):
+        addr = ''.join([addr, struct.pack('B', int(buf[i: i + 2], 16))],)
+    return addr
 
-def build_arp_packet(source_mac, src = None, dst = None):
-	""" forge arp packets used to poison and reset target connection """
-	arp = dpkt.arp.ARP()
-	packet = dpkt.ethernet.Ethernet()
-	if not src or not dst:
-		return False
-	arp.sha = string_to_binary(source_mac)
-	arp.spa = inet_aton(dst)
-	arp.tha = '\x00' * 6
-	arp.tpa = inet_aton(src)
-	arp.op = dpkt.arp.ARP_OP_REPLY
-	packet.src = string_to_binary(source_mac)
-	packet.dst = '\xff' * 6 # broadcast address
-	packet.data = arp
-	packet.type = dpkt.ethernet.ETH_TYPE_ARP
-	return packet
+def build_arp_packet(source_mac, src=None, dst=None):
+    """ forge arp packets used to poison and reset target connection """
+    arp = dpkt.arp.ARP()
+    packet = dpkt.ethernet.Ethernet()
+    if not src or not dst:
+        return False
+    arp.sha = string_to_binary(source_mac)
+    arp.spa = inet_aton(dst)
+    arp.tha = '\x00' * 6
+    arp.tpa = inet_aton(src)
+    arp.op = dpkt.arp.ARP_OP_REPLY
+    packet.src = string_to_binary(source_mac)
+    packet.dst = '\xff' * 6 # broadcast address
+    packet.data = arp
+    packet.type = dpkt.ethernet.ETH_TYPE_ARP
+    return packet
 
 def get_manufacturer(manufacturer):
-	"""
-	get a list of MAC octets based on manufacturer fetching data from
-	http://anonsvn.wireshark.org/wireshark/trunk/manuf
-	"""
-	output = []
-	m_list = None
-	if not os.path.exists("./manufacturers"):
-		os.makedirs("./manufacturers")
-	if not os.path.isfile("./manufacturers/list.txt"):
-		print "[+] No local cache data found for " + G + manufacturer + W + " found, fetching from web.."
-		try:
-			u = urllib2.urlopen(config.MANUFACTURER_URL)
-			m_list = open("./manufacturers/list.txt", "w+r")
-			for line in u:
-				try:
-					mac = line.split()[0]
-					man = line.split()[1]
-					if re.search(manufacturer.lower(), man.lower()) and len(mac) < 17 and len(mac) > 1:
-						output.append(mac)
-				except IndexError:
-					pass
-			if len(output) > 0:
-				m_list.write("[" + manufacturer.lower() + "]\nMAC = ")
-				m_list.write(",".join(output))
-				m_list.write("\n")
-		except:
-			print "[!] Error occured while trying to fetch data for manufacturer based mac address"
-			pass
-	else:
-		macs = []
-		print "[+] Fetching data from local cache.."
-		conf = ConfigParser.ConfigParser()
-		conf.read("./manufacturers/list.txt")
-		try:
-			macs = conf.get(manufacturer.lower(), 'MAC').split(',')
-			if len(macs) > 0:
-				print "[+] Found mac octets from local cache for " + G + manufacturer + W + " device"
-				return macs
-		except:
-			u = urllib2.urlopen(config.MANUFACTURER_URL)
-			m_list = open("./manufacturers/list.txt", "a+r")
-			for line in u:
-				try:
-					mac = line.split()[0]
-					man = line.split()[1]
-					if re.search(manufacturer.lower(), man.lower()) and len(mac) < 17 and len(mac) > 1:
-						output.append(mac)
-				except IndexError:
-					pass
-			if len(output):
-				m_list.write("[" + manufacturer.lower() + "]\nMAC = ")
-				m_list.write(",".join(output))
-				m_list.write("\n")
-	m_list.close()
-	return output
+    """
+    get a list of MAC octets based on manufacturer fetching data from
+    http://anonsvn.wireshark.org/wireshark/trunk/manuf
+    """
+    output = []
+    m_list = None
+
+    if not os.path.exists("./manufacturers"):
+        os.makedirs("./manufacturers")
+
+    if not os.path.isfile("./manufacturers/list.txt"):
+        print("[+] No local cache data found for " + G + manufacturer + W
+              + " found, fetching from web..")
+        try:
+            urls = urllib2.urlopen(config.MANUFACTURER_URL)
+            m_list = open("./manufacturers/list.txt", "w+")
+
+            for line in urls:
+                try:
+                    mac = line.split()[0]
+                    man = line.split()[1]
+                    if re.search(manufacturer.lower(),
+                                 man.lower()) and len(mac) < 17 and len(mac) > 1:
+                        output.append(mac)
+                except IndexError:
+                    pass
+
+            if len(output) > 0:
+                m_list.write("[" + manufacturer.lower() + "]\nMAC = ")
+                m_list.write(",".join(output))
+                m_list.write("\n")
+        except:
+            print("[!] Error occured while trying to fetch data for manufacturer based mac address")
+
+    else:
+        macs = []
+        print("[+] Fetching data from local cache..")
+        conf = ConfigParser.ConfigParser()
+        conf.read("./manufacturers/list.txt")
+
+        try:
+            macs = conf.get(manufacturer.lower(), 'MAC').split(',')
+            if len(macs) > 0:
+                print("[+] Found mac octets from local cache for " + G + manufacturer + W
+                      + " device")
+                return macs
+        except:
+            urls = urllib2.urlopen(config.MANUFACTURER_URL)
+            m_list = open("./manufacturers/list.txt", "a+")
+
+            for line in urls:
+                try:
+                    mac = line.split()[0]
+                    man = line.split()[1]
+                    if re.search(manufacturer.lower(),
+                                 man.lower()) and len(mac) < 17 and len(mac) > 1:
+                        output.append(mac)
+                except IndexError:
+                    pass
+
+            if len(output):
+                m_list.write("[" + manufacturer.lower() + "]\nMAC = ")
+                m_list.write(",".join(output))
+                m_list.write("\n")
+
+    m_list.close()
+    return output
