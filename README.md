@@ -7,17 +7,27 @@ Born as a didactic project for learning python language, i decline every respons
 
 ## Installation
 
+```sh
+$ git clone https://github.com/codepr/creak.git
+$ cd creak
+$ python setup.py install
 ```
-git clone https://github.com/codepr/creak.git
+or simply clone the repository and run the `creak.py` after all requirements are
+installed:
+
+```sh
+$ git clone https://github.com/codepr/creak.git
 ```
-It is required to have installed pcap libraries for raw packet manipulations
-and dpkt module, for dns spoofing options is required to have installed dnet
-module from libdnet package, do not confuse it with pydnet (network evaluation
+
+It is required to have installed `pcap` libraries for raw packet manipulations
+and `dpkt` module, for dns spoofing options is required to have installed dnet
+module from `libdnet` package, do not confuse it with pydnet (network evaluation
 tool) module.
+It can use also `scapy` if desired, can just be set in the `config.py` file.
 
 ## Options
 
-```
+```sh
 Usage: creak.py [options] dev
 
 Options:
@@ -42,34 +52,46 @@ Options:
   -v, --verbose        Verbose output mode
   -d, --dotted         Dotted output mode
 ```
+
 ## Example
 
 Most basic usage:
 Deny all traffic to the target host
 
-``` python creak.py -t 192.168.1.30 wlan0 ```
+```sh
+$ python creak.py -t 192.168.1.30 wlan0
+```
 
 Set a different gateway:
 
-``` python creak.py -s 192.168.1.2 -t 192.168.1.30 wlan0 ```
+```sh
+$ python creak.py -s 192.168.1.2 -t 192.168.1.30 wlan0
+```
 
 Set a different mac address for the device:
 
-``` python creak.py -m 00:11:22:33:44:55 -t 192.168.1.30 wlan0 ```
+```sh
+$ python creak.py -m 00:11:22:33:44:55 -t 192.168.1.30 wlan0
+```
 
 Spoof mac address generating a fake one:
 
-``` python creak.py -x -t 192.168.1.30 wlan0 ```
+```sh
+$ python creak.py -x -t 192.168.1.30 wlan0
+```
 
 Spoof mac address generating one based on manufacturer(e.g Xeros):
 
-``` python creak.py -x -M xeros -t 192.168.1.30 wlan0 ```
+```sh
+$ python creak.py -x -M xeros -t 192.168.1.30 wlan0
+```
 
 DNS spoofing using a fake MAC address, redirecting ab.xy to cd.xz(e.g.
 		localhost):
 
-``` python creak.py -x -M xeros -t 192.168.1.30 -a www.ab.xy -r www.cd.xz
-	wlan0```
+```sh
+$ python creak.py -x -M xeros -t 192.168.1.30 -a www.ab.xy -r www.cd.xz wlan0
+```
 
 ## Changelog
 
