@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # Copyright (c) 2014-2016 Andrea Baldan
 #
 # This program is free software; you can redistribute it and/or
@@ -15,20 +16,27 @@
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
 # USA
 
+""" Utility functions module """
+
 import os
 import re
 import sys
+import uuid
 import time
 import binascii
 import random
 import subprocess
 import struct
 import fcntl
-import dpkt
-import urllib2
-import ConfigParser
+try:
+    import dpkt
+    import urllib2
+    import ConfigParser
+except ImportError:
+    print("[!] Missing modules dpkt or urllib2 or ConfigParser")
 from socket import socket, inet_aton, inet_ntoa, AF_INET, SOCK_DGRAM
-import config
+from scapy.all import ARP, Ether, srp
+import creak.config as config
 
 # console colors
 W = '\033[0m'  # white (normal)
@@ -71,24 +79,40 @@ def get_default_gateway_linux():
 
             return inet_ntoa(struct.pack("<L", int(fields[2], 16)))
 
-def get_mac_addr(dev):
+def get_mac_by_dev(dev):
     """ try to retrieve MAC address associated with device """
-    sock_fd = socket(AF_INET, SOCK_DGRAM)
-    info = fcntl.ioctl(sock_fd.fileno(), 0x8927, struct.pack('256s', dev[:15]))
-    sock_fd.close()
-    return ''.join(['%02x:' % ord(char) for char in info[18:24]])[:-1]
+    try:
+        sock_fd = socket(AF_INET, SOCK_DGRAM)
+        info = fcntl.ioctl(sock_fd.fileno(), 0x8927, struct.pack('256s', str(dev[:15])))
+        return ''.join(['%02x:' % ord(char) for char in info[18:24]])[:-1]
+    except IOError:
+        sock_fd.close()
+        mac_addr = hex(uuid.getnode()).replace('0x', '')
+        return ':'.join(mac_addr[i : i + 2] for i in range(0, 11, 2))
 
-def get_mac_byip(ip_addr):
+def get_mac_by_ip(ip_addr):
     """ try to retrieve MAC address associated with ip """
-    subprocess.Popen(["ping", "-c 1", ip_addr], stdout=subprocess.PIPE)
-    time.sleep(0.5) # just to be sure of the ping response time
-    pid = subprocess.Popen(["arp", "-n", ip_addr], stdout=subprocess.PIPE)
-    arp_output = pid.communicate()[0]
+    try:
+        subprocess.Popen(["ping", "-c 1", ip_addr], stdout=subprocess.PIPE)
+        time.sleep(0.5) # just to be sure of the ping response time
+        pid = subprocess.Popen(["arp", "-n", ip_addr], stdout=subprocess.PIPE)
+        arp_output = pid.communicate()[0]
+    except OSError:
+        pass
     try:
         mac = re.search(r"(([a-f\d]{1,2}\:){5}[a-f\d]{1,2})", arp_output).groups()[0]
-    except IndexError:
-        pass
+    except (IndexError, UnboundLocalError):
+        exit()
     return parse_mac(mac)
+
+def get_mac_by_ip_s(ip_address, delay):
+    """try to retrieve MAC address associated with ip using Scapy library """
+    responses, _ = srp(Ether(dst="ff:ff:ff:ff:ff:ff")/ARP(pdst=ip_address),
+                       timeout=delay, retry=10)
+    # return the MAC address from a response
+    for _, response in responses:
+        return response[Ether].src
+    return None
 
 def parse_mac(address):
     """ remove colon inside mac addres, if there's any """
@@ -102,9 +126,9 @@ def fake_mac_address(prefix, mode=None):
     """ generate a fake MAC address """
     if mode == 1:
         prefix = [0x00, 0x16, 0x3e]
-        prefix += [(random.randint(0x00, 0x7f)) for p in xrange(3)]
+        prefix += [(random.randint(0x00, 0x7f)) for _ in xrange(3)]
     else:
-        prefix += [(random.randint(0x00, 0xff)) for p in xrange(6 - len(prefix))]
+        prefix += [(random.randint(0x00, 0xff)) for _ in xrange(6 - len(prefix))]
     return ':'.join('%02x' % x for x in prefix)
 
 def change_mac(dev, new_mac):
@@ -170,8 +194,7 @@ def get_manufacturer(manufacturer):
     get a list of MAC octets based on manufacturer fetching data from
     http://anonsvn.wireshark.org/wireshark/trunk/manuf
     """
-    output = []
-    m_list = None
+    output, m_list = [], None
 
     if not os.path.exists("./manufacturers"):
         os.makedirs("./manufacturers")
@@ -192,11 +215,6 @@ def get_manufacturer(manufacturer):
                         output.append(mac)
                 except IndexError:
                     pass
-
-            if len(output) > 0:
-                m_list.write("[" + manufacturer.lower() + "]\nMAC = ")
-                m_list.write(",".join(output))
-                m_list.write("\n")
         except:
             print("[!] Error occured while trying to fetch data for manufacturer based mac address")
 
@@ -226,10 +244,9 @@ def get_manufacturer(manufacturer):
                 except IndexError:
                     pass
 
-            if len(output):
-                m_list.write("[" + manufacturer.lower() + "]\nMAC = ")
-                m_list.write(",".join(output))
-                m_list.write("\n")
-
+    m_list.write("[" + manufacturer.lower() + "]\nMAC = ")
+    m_list.write(",".join(output))
+    m_list.write("\n")
     m_list.close()
+
     return output

@@ -1,3 +1,4 @@
 pypcap
 dpkt
 dnet
+scapy

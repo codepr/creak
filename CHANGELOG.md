@@ -1,3 +1,15 @@
+#### 1.0.0 - 2016-10-27
+
+##### Added
+
+- `scapy` support added
+- Added a `setup.py`
+
+##### Changed
+
+- Full refactored the code, more maintainable, OOP for MITM side
+- Fixed some bugs
+
 #### 0.0.3 - 2016-10-26
 
 ###### Added

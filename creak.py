@@ -1,4 +1,5 @@
-#!/bin/python
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
 # Copyright (c) 2014-2016 Andrea Baldan
 #
@@ -17,13 +18,40 @@
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
 # USA
 
+"""
+Usage: creak.py [options] dev
+
+Options:
+  -h, --help           show this help message and exit
+  -1, --sessions-scan  Sessions scan mode
+  -2, --dns-spoof      Dns spoofing
+  -x, --spoof          Spoof mode, generate a fake MAC address to be used
+                       during attack
+  -m MACADDR           Mac address octet prefix (could be an entire MAC
+                       address in the form AA:BB:CC:DD:EE:FF)
+  -M MANUFACTURER      Manufacturer of the wireless device, for retrieving a
+                       manufactur based prefix for MAC spoof
+  -s SOURCE            Source ip address (e.g. a class C address like
+                       192.168.1.150) usually the router address
+  -t TARGET            Target ip address (e.g. a class C address like
+                       192.168.1.150)
+  -p PORT              Target port to shutdown
+  -a HOST              Target host that will be redirect while navigating on
+                       target machine
+  -r REDIR             Target redirection that will be fetched instead of host
+                       on the target machine
+  -v, --verbose        Verbose output mode
+  -d, --dotted         Dotted output mode
+"""
+
 import os
 import sys
+import time
 import random
 import argparse
-import core.config
-import core.utils as utils
-import core.mitm as mitm
+import creak.config as config
+import creak.utils as utils
+import creak.mitm as cmitm
 
 (G, W) = (utils.G, utils.W)
 
@@ -34,7 +62,7 @@ def parse_arguments():
                         help='Sessions scan mode')
     parser.add_argument('-2', '--dns-spoof', action='store_const', const=2, dest='mode',
                         help='Dns spoofing')
-    parser.add_argument('-x', '--spoof', action='store_const', const=1, dest='spoof',
+    parser.add_argument('-x', '--spoof', action='store_true', default=False, dest='spoof',
                         help='Spoof mode, generate a fake MAC address to be used during attack')
     parser.add_argument('-m', dest='macaddr',
                         help='Mac address octet prefix (could be an entire MAC address in the'
@@ -54,138 +82,110 @@ def parse_arguments():
     parser.add_argument('-r', dest='redir',
                         help='Target redirection that will be fetched instead of host on the '
                         'target machine')
-    parser.add_argument('-v', '--verbose', action='store_const', const=1, dest='verbosity',
+    parser.add_argument('-v', '--verbose', action='store_true', default=False, dest='verbosity',
                         help='Verbose output mode')
-    parser.add_argument('-d', '--dotted', action='store_const', const=1, dest='dotted',
+    parser.add_argument('-d', '--dotted', action='store_true', default=False, dest='dotted',
                         help='Dotted output mode')
+    parser.add_argument('dev', metavar='DEV', nargs='+', help='A device to use (e.g. wlan0)')
 
     return parser.parse_args()
 
-# check privileges (low level socket and pcap require root)
-if not os.geteuid() == 0:
-    sys.exit('You must be root.')
+def get_mitm(parsed_args):
+    """
+    create an object of type Mitm based on arguments received
+    """
+    args = parsed_args
 
-(OPTIONS, ARGS) = parse_arguments()
+    if not args.dev:
+        sys.exit(sys.argv[0] + ' -h for help\n[!] Must specify interface')
 
-print("")
+    dev = "%s" % "','".join(args.dev)
 
-if len(ARGS) != 1:
-    print(sys.argv[0] + ' -h for help')
-    print('[!] Must specify interface')
-    exit()
+    original_mac_addr = utils.get_mac_by_dev(dev)
+    mac_addr, changed = original_mac_addr, False
 
-MAC_ADDR = ""
-ORIGINAL_MAC_ADDR = utils.get_mac_addr(ARGS[0])
-CHANGED = False
+    if not args.source:
+        try:
+            args.source = utils.get_default_gateway_linux()
+        except OSError:
+            sys.exit('[!] Unable to retrieve default gateway, please specify one using -s option')
 
-if not OPTIONS.source:
-    try:
-        OPTIONS.source = utils.get_default_gateway_linux()
-    except:
-        print("[!] Unable to retrieve default gateway, please specify one using -s option")
-        sys.exit(2)
+    if not args.target:
+        sys.exit('[!] Must specify target address')
 
-if not OPTIONS.target:
-    print('[!] Must specify target address')
-    exit()
+    config.VERBOSE, config.DOTTED = args.verbosity, args.dotted
 
-if OPTIONS.verbosity == 1:
-    core.config.verbose = True
-
-if OPTIONS.dotted == 1:
-    core.config.dotted = True
-
-if OPTIONS.spoof == 1:
-
-    if not OPTIONS.macaddr and not OPTIONS.manufacturer:
-
-        CHOICE = input('[+] In order to change MAC address ' + G + ARGS[0] + W
+    if args.spoof is True:
+        choice = input('[+] In order to change MAC address ' + G + dev + W
                        + ' must be temporary put down. Proceed?[y/n] ')
+        if choice == 'y':
+            if not args.macaddr and not args.manufacturer:
+                mac_addr = utils.fake_mac_address([], 1)
+            elif args.macaddr and not args.manufacturer:
+                if utils.parse_mac(args.macaddr) != utils.parse_mac(original_mac_addr):
+                    mac_addr = utils.fake_mac_address(utils.mac_to_hex(args.macaddr))
+            elif args.manufacturer:
+                macs = utils.get_manufacturer(args.manufacturer)
+                mac_addr = utils.fake_mac_address(utils.mac_to_hex(random.choice(macs)))
 
-        if CHOICE == 'y':
-            MAC_ADDR = utils.fake_mac_address([], 1)
             try:
-                utils.change_mac(ARGS[0], MAC_ADDR)
-                CHANGED = True
-            except:
+                utils.change_mac(dev, mac_addr)
+                changed = True
+            except OSError:
                 pass
-            else:
-                MAC_ADDR = ORIGINAL_MAC_ADDR
 
-        elif OPTIONS.macaddr and not OPTIONS.manufacturer:
+        print("[+] Waiting for wireless reactivation..")
 
-            if utils.parse_mac(OPTIONS.macaddr) != utils.parse_mac(ORIGINAL_MAC_ADDR):
-                MAC_ADDR = utils.fake_mac_address(utils.mac_to_hex(OPTIONS.macaddr))
-                CHOICE = input('[+] In order to change MAC address ' + G + ARGS[0] + W
-                               + ' must be temporary put down. Proceed?[y/n] ')
+        if args.mode == 1 or args.mode == 2:
+            time.sleep(10)
+        else:
+            time.sleep(4)
 
-                if CHOICE == 'y':
-                    try:
-                        utils.change_mac(ARGS[0], MAC_ADDR)
-                        CHANGED = True
-                    except:
-                        pass
-                    else:
-                        MAC_ADDR = ORIGINAL_MAC_ADDR
+    # no spoof but set mac address anyway
+    elif args.macaddr:
+        mac_addr = args.macaddr
 
-                else:
-                    MAC_ADDR = OPTIONS.macaddr
+    print("[+] Using " + G + mac_addr + W + " MAC address\n"
+          "[+] Set " + G + args.source + W + " as default gateway")
 
-            elif OPTIONS.manufacturer:
-                MACS = utils.get_manufacturer(OPTIONS.manufacturer)
-                MAC_ADDR = utils.fake_mac_address(utils.mac_to_hex(random.choice(MACS)))
-                CHOICE = input('[+] In order to change MAC address ' + G + ARGS[0] + W
-                               + ' must be temporary put down. Proceed?[y/n] ')
+    if config.SCAPY is True:
+        return (args, changed, original_mac_addr,
+                cmitm.ScapyMitm(dev, utils.parse_mac(mac_addr), args.source, args.target))
+    return (args, changed, original_mac_addr,
+            cmitm.PcapMitm(dev, utils.parse_mac(mac_addr), args.source, args.target))
 
-                if CHOICE == 'y':
-                    try:
-                        utils.change_mac(ARGS[0], MAC_ADDR)
-                        CHANGED = True
-                    except:
-                        pass
-                    else:
-                        MAC_ADDR = ORIGINAL_MAC_ADDR
+def main():
+    """
+    Main point of access of the program
+    """
+    # check privileges (low level socket and pcap require root)
+    if not os.geteuid() == 0:
+        sys.exit('You must be root.')
 
-                print("[+] Waiting for wireless reactivation..")
+    print("")
 
-                if OPTIONS.mode == 1 or OPTIONS.mode == 2:
-                    time.sleep(10)
-                else:
-                    time.sleep(4)
+    (args, changed, original_mac_addr, mitm) = get_mitm(parse_arguments())
 
-            else:
-                if not OPTIONS.macaddr:
-                    MAC_ADDR = ORIGINAL_MAC_ADDR
-                else:
-                    MAC_ADDR = OPTIONS.macaddr
+    if args.mode == 1:
+        mitm.list_sessions(args.port)
 
-print("[+] Using " + G + MAC_ADDR + W + " MAC address")
-print("[+] Set " + G + OPTIONS.source + W + " as default gateway")
+    elif args.mode == 2:
+        mitm.dns_spoof(args.host, args.redir)
 
-if OPTIONS.mode == 1:
-    mitm.get_sessions(ARGS[0], OPTIONS.target)
-
-elif OPTIONS.mode == 2:
-    mitm.dns_spoof(ARGS[0],
-                   utils.parse_mac(MAC_ADDR),
-                   OPTIONS.source, OPTIONS.target,
-                   OPTIONS.host, OPTIONS.redir)
-
-else:
-
-    if OPTIONS.port:
-        mitm.rst_inject(ARGS[0],
-                        utils.parse_mac(MAC_ADDR),
-                        OPTIONS.source, OPTIONS.target,
-                        port=OPTIONS.port)
     else:
-        mitm.rst_inject(ARGS[0], utils.parse_mac(MAC_ADDR), OPTIONS.source, OPTIONS.target)
+        if args.port:
+            mitm.rst_inject(args.port)
+        else:
+            mitm.rst_inject()
 
-if CHANGED is True:
-    try:
-        time.sleep(1)
-        print("[+] Resetting MAC address to original value " + G + ORIGINAL_MAC_ADDR + W
-              + " for device " + G + ARGS[0] + W)
-        utils.change_mac(ARGS[0], ORIGINAL_MAC_ADDR)
-    except:
-        pass
+    if changed is True:
+        try:
+            time.sleep(1)
+            print("[+] Resetting MAC address to original value " + G + original_mac_addr + W
+                  + " for device " + G + args.dev + W)
+            utils.change_mac(args.dev, original_mac_addr)
+        except OSError:
+            pass
+
+if __name__ == '__main__':
+    sys.exit(main())
