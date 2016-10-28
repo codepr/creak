@@ -121,7 +121,7 @@ class Mitm(object):
                             urp=0)
                         # build ip layer
                         ip_layer = dpkt.ip.IP(
-                            v_hl=ip_packet.v_hl,
+                            hl=ip_packet.hl,
                             tos=ip_packet.tos,
                             len=40,
                             id=ip_packet.id + 1,
