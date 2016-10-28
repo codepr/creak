@@ -85,9 +85,9 @@ class Mitm(object):
         packets = pcap.pcap(self.dev)
         packets.setfilter(pcap_filter) # we need only target packets
 
-        log.info('[+] Start poisoning on ' + G + self.dev + W + ' between ' + G + self.gateway + W
-                 + ' and ' + R
-                 + (','.join(self.target) if isinstance(self.target, list) else self.target) + W)
+        print('[+] Start poisoning on ' + G + self.dev + W + ' between ' + G + self.gateway + W
+              + ' and ' + R
+              + (','.join(self.target) if isinstance(self.target, list) else self.target) + W +'\n')
 
         if port:
             print('[+] Sending RST packets to ' + R
@@ -176,12 +176,12 @@ class Mitm(object):
             22: ' ssh session',
             23: ' telnet session',
             25: ' SMTP session',
-            80: '\t HTTP session',
+            80: ' HTTP session',
             110: ' POP3 session',
             143: ' IMAP session',
             194: ' IRC session',
             220: ' IMAPv3 session',
-            443: '\t SSL session',
+            443: ' SSL session',
             445: ' SAMBA session',
             989: ' FTPS session',
             990: ' FTPS session',
@@ -200,10 +200,8 @@ class Mitm(object):
         poison_thread.start()
         print('[+] Start poisoning on ' + G + self.dev + W + ' between ' + G + source + W
               + ' and ' + R
-              + (','.join(self.target) if isinstance(self.target, list) else self.target) + W)
-        sessions = []
-        session = 0
-        sess = ""
+              + (','.join(self.target) if isinstance(self.target, list) else self.target) + W +'\n')
+        sessions = {}
         try:
             for _, pkt in packets:
                 eth = dpkt.ethernet.Ethernet(pkt)
@@ -211,30 +209,22 @@ class Mitm(object):
                 if ip_packet.p == dpkt.ip.IP_PROTO_TCP:
                     tcp = ip_packet.data
                     if tcp.flags != dpkt.tcp.TH_RST:
-                        if isinstance(self.target, list):
-                            if inet_ntoa(ip_packet.src) in self.target:
-                                sess = inet_ntoa(ip_packet.src) + ":" + str(tcp.sport)
-                                sess += "\t-->\t" + inet_ntoa(ip_packet.dst) + ":" + str(tcp.dport)
-                            else:
-                                sess = inet_ntoa(ip_packet.dst) + ":" + str(tcp.dport)
-                                sess += "\t<--\t" + inet_ntoa(ip_packet.src) + ":" + str(tcp.sport)
-                        else:
-                            if inet_ntoa(ip_packet.src) == self.target:
-                                sess = inet_ntoa(ip_packet.src) + ":" + str(tcp.sport)
-                                sess += "\t-->\t" + inet_ntoa(ip_packet.dst) + ":" + str(tcp.dport)
-                            else:
-                                sess = inet_ntoa(ip_packet.dst) + ":" + str(tcp.dport)
-                                sess += "\t<--\t" + inet_ntoa(ip_packet.src) + ":" + str(tcp.sport)
-
+                        sess = "%-25s <-> %25s" % (inet_ntoa(ip_packet.src) + ":"
+                                                   + str(tcp.sport), inet_ntoa(ip_packet.dst) + ":"
+                                                   + str(tcp.dport))
+                        check = False
                         if sess not in sessions:
-                            sessions.append(sess)
-                            if tcp.sport in notorious_services:
-                                sess += notorious_services[tcp.sport]
-                            elif tcp.dport in notorious_services:
-                                sess += notorious_services[tcp.dport]
+                            check = True
 
-                            print(" [{0}] {1}".format(session, sess))
-                            session += 1
+                        sessions[sess] = "Others"
+
+                        if tcp.sport in notorious_services:
+                            sessions[sess] = notorious_services[tcp.sport]
+                        elif tcp.dport in notorious_services:
+                            sessions[sess] = notorious_services[tcp.dport]
+
+                        if check is True:
+                            print(" [{:^5}] {} : {}".format(len(sessions), sess, sessions[sess]))
 
         except KeyboardInterrupt:
             print('[+] Session scan interrupted\n\r')
@@ -251,7 +241,7 @@ class Mitm(object):
 
         print('[+] Start poisoning on ' + G + self.dev + W + ' between ' + G + self.gateway + W
               + ' and ' + R
-              + (','.join(self.target) if isinstance(self.target, list) else self.target) + W)
+              + (','.join(self.target) if isinstance(self.target, list) else self.target) + W +'\n')
         # need to create a daemon that continually poison our target
         poison_thread = Thread(target=self.poison, args=(2, ))
         poison_thread.daemon = True
