@@ -250,3 +250,8 @@ def get_manufacturer(manufacturer):
     m_list.close()
 
     return output
+
+def is_ipv4(ipstring):
+    """ check if the given string is an ipv4"""
+    match = re.match(r"^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$", ipstring)
+    return bool(match) and all(map(lambda n: 0 <= int(n) <= 255, match.groups()))

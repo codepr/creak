@@ -73,7 +73,7 @@ def parse_arguments():
     parser.add_argument('-s', dest='source',
                         help='Source ip address (e.g. a class C address like 192.168.1.150) '
                         'usually the router address')
-    parser.add_argument('-t', dest='target',
+    parser.add_argument('-t', action='append', dest='target', default=[],
                         help='Target ip address (e.g. a class C address like 192.168.1.150)')
     parser.add_argument('-p', dest='port',
                         help='Target port to shutdown')
@@ -108,16 +108,25 @@ def get_mitm(parsed_args):
         try:
             args.source = utils.get_default_gateway_linux()
         except OSError:
-            sys.exit('[!] Unable to retrieve default gateway, please specify one using -s option')
+            args.source = raw_input('[!] Unable to retrieve default gateway, please specify one: ')
+            if not utils.is_ipv4(args.source):
+                exit('[!] Unable to retrieve default gateway, please specify one using -s option')
+            else:
+                pass
 
     if not args.target:
-        sys.exit('[!] Must specify target address')
+        args.target = raw_input('[?] No target address specified, please insert one: ')
+        if not utils.is_ipv4(args.target):
+            exit('[!] Must specify at least one target address')
+    else:
+        if len(args.target) == 1:
+            args.target = ''.join(args.target)
 
     config.VERBOSE, config.DOTTED = args.verbosity, args.dotted
 
     if args.spoof is True:
-        choice = input('[+] In order to change MAC address ' + G + dev + W
-                       + ' must be temporary put down. Proceed?[y/n] ')
+        choice = raw_input('[+] In order to change MAC address ' + G + dev + W
+                           + ' must be temporary put down. Proceed?[y/n] ')
         if choice == 'y':
             if not args.macaddr and not args.manufacturer:
                 mac_addr = utils.fake_mac_address([], 1)
@@ -160,7 +169,7 @@ def main():
     """
     # check privileges (low level socket and pcap require root)
     if not os.geteuid() == 0:
-        sys.exit('You must be root.')
+        exit('You must be root.')
 
     print("")
 
@@ -170,7 +179,9 @@ def main():
         mitm.list_sessions(args.port)
 
     elif args.mode == 2:
-        mitm.dns_spoof(args.host, args.redir)
+        if not args.redir:
+            exit("[!] missing redirection")
+            mitm.dns_spoof(args.host, args.redir)
 
     else:
         if args.port:
@@ -188,4 +199,4 @@ def main():
             pass
 
 if __name__ == '__main__':
-    sys.exit(main())
+    exit(main())

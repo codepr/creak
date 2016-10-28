@@ -43,7 +43,7 @@ Options:
   -s SOURCE            Source ip address (e.g. a class C address like
                        192.168.1.150) usually the router address
   -t TARGET            Target ip address (e.g. a class C address like
-                       192.168.1.150)
+                       192.168.1.150), can be specified multiple times
   -p PORT              Target port to shutdown
   -a HOST              Target host that will be redirect while navigating on
                        target machine
@@ -93,14 +93,20 @@ DNS spoofing using a fake MAC address, redirecting ab.xy to cd.xz(e.g.
 $ python creak.py -x -M xeros -t 192.168.1.30 -a www.ab.xy -r www.cd.xz wlan0
 ```
 
+Deny multiple hosts in the subnet:
+
+```sh
+$ python creak.py -x -t 192.168.1.30 -t 192.168.1.31 -t 192.168.1.32 wlan0
+```
+
 ## Changelog
 
 See the [CHANGELOG](CHANGELOG.md) file.
 
 ## TODO
 
-- Multiple hosts denying
 - Sessions grouping based on active load usage
+- Sessions hijacking
 
 ## License
 

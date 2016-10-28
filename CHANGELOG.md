@@ -1,3 +1,17 @@
+#### 1.0.1 - 2016-10-28
+
+##### Added
+
+- Support for multiple host denying and spoofing, specify multiple host using
+  `-t` opition
+
+##### Changed
+
+- Better sanitization of the input, fixed a bug regarding `input` vs `raw_input`
+  misleading difference between python 2.x and python 3.x
+- Fixed some bugs
+- Updated TODO list
+
 #### 1.0.0 - 2016-10-27
 
 ##### Added
