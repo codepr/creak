@@ -180,8 +180,8 @@ def main():
 
     elif args.mode == 2:
         if not args.redir:
-            exit("[!] missing redirection")
-            mitm.dns_spoof(args.host, args.redir)
+            exit("[!] Missing redirection")
+        mitm.dns_spoof(args.host, args.redir)
 
     else:
         if args.port:

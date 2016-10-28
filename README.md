@@ -105,6 +105,7 @@ See the [CHANGELOG](CHANGELOG.md) file.
 
 ## TODO
 
+- Complete `Scapy` support
 - Sessions grouping based on active load usage
 - Sessions hijacking
 

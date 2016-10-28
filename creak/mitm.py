@@ -22,7 +22,7 @@ import logging as log
 from socket import socket, inet_ntoa, gethostbyname, PF_PACKET, SOCK_RAW
 from threading import Thread
 try:
-    from scapy.all import ARP, send, conf
+    from scapy.all import ARP, send, conf, sniff, TCP
     conf.verb = 0
 except ImportError:
     print("[!] Missing module scapy, try setting SCAPY to False in config.py"
