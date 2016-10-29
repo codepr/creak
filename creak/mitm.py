@@ -377,6 +377,42 @@ class ScapyMitm(Mitm):
     def __init__(self, device, source_mac, gateway, target):
         super(ScapyMitm, self).__init__(device, source_mac, gateway, target)
 
+    def _send_rst(self, pkt):
+        if TCP in pkt and 'R' not in pkt.sprintf('%TCP.flags%'):
+            tcp_layer = TCP(sport=pkt[TCP].sport,
+                            dport=pkt[TCP].dport,
+                            seq=pkt[TCP].seq,
+                            ack=0,
+                            flags='R',
+                            window=pkt[TCP].window,
+                            chksum=0, urgptr=0)
+                        # # build ip layer
+                        # ip_layer = dpkt.ip.IP(
+                        #     hl=ip_packet.hl,
+                        #     tos=ip_packet.tos,
+                        #     len=40,
+                        #     id=ip_packet.id + 1,
+                        #     off=0x4000,
+                        #     ttl=128,
+                        #     p=ip_packet.p,
+                        #     sum=0,
+                        #     src=ip_packet.src,
+                        #     dst=ip_packet.dst,
+                        #     data=tcp_layer)
+                        # # build ethernet layer
+                        # eth_layer = dpkt.ethernet.Ethernet(
+                        #     dst=eth.dst,
+                        #     src=eth.src,
+                        #     type=eth.type,
+                        #     data=ip_layer)
+
+    def rst_inject(self, port=None):
+        sniff(filter=self._build_pcap_filter('ip host '),
+              iface=self.dev,
+              timeout=10,
+              count=0,
+              prn=self._send_rst)
+
     def poison(self, delay):
         if not isinstance(self.target, list):
             dst_mac = utils.get_mac_by_ip_s(self.target, delay)
