@@ -1,7 +1,7 @@
 
-from creakframework import CreakFramework
+from baseplugin import BasePlugin
 
-class Plugin(CreakFramework):
+class Plugin(BasePlugin):
 
     def init_plugin(self):
         self.required_params['name'] = True

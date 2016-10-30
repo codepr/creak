@@ -50,14 +50,12 @@ class CreakFramework(Cmd):
 
     def __init__(self, args):
         Cmd.__init__(self)
-        self.app_path = sys.path[0]
+        # self.app_path = sys.path[0]
         self._loaded_plugins = {}
         self._plugin_name = args
-        self.ruler = '-'
-        self.spacer = '  '
         self._prompt_template = '%s::%s > '
         self.time_format = '%Y-%m-%d %H:%M:%S'
-        self.required_params = Parameters()
+        # self.required_params = Parameters()
         self.params = {}
         self.doc_header = 'Commands (type [help|?] <topic>):'
         self.rpc_cache = []
@@ -115,8 +113,6 @@ class CreakFramework(Cmd):
 
     def _validate_params(self):
         for param in self.required_params:
-            # if value type is bool or int, then we know the options is set
-            # if not type(self.options[option]) in [bool, int]:
             if self.required_params[param] is True and param not in self.params:
                 print('Value required for mandatory \'%s\' parameter.' % (param.upper()))
                 return False
@@ -193,20 +189,24 @@ class CreakFramework(Cmd):
         # load the module
         plug_dispname = plugins[0]
         # loop to support reload logic
-        while True:
-            y = self._loaded_plugins[plug_dispname]
-            y.init_plugin()
-            # send analytics information
-            plug_loadpath = os.path.abspath(sys.modules[y.__module__].__file__)
-            # begin a command loop
-            y.prompt = self._prompt_template % (self.prompt[:-12], plug_dispname.split('/')[-1])
-            try:
-                y.cmdloop()
-            except KeyboardInterrupt:
-                print('')
-            if y._exit == 1:
-                return True
-            break
+        plugin = self._loaded_plugins[plug_dispname]
+        plugin.init_plugin()
+        self.required_params = plugin.required_params
+        self.prompt = self._prompt_template % (self.prompt[:-12], plug_dispname.split('/')[-1])
+        # while True:
+        #     y = self._loaded_plugins[plug_dispname]
+        #     y.init_plugin()
+        #     # send analytics information
+        #     plug_loadpath = os.path.abspath(sys.modules[y.__module__].__file__)
+        #     # begin a command loop
+        #     y.prompt = self._prompt_template % (self.prompt[:-12], plug_dispname.split('/')[-1])
+        #     try:
+        #         y.cmdloop()
+        #     except KeyboardInterrupt:
+        #         print('')
+        #     if y._exit == 1:
+        #         return True
+        #     break
 
     def do_set(self, args):
         '''Sets module options'''
