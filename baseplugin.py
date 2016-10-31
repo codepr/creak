@@ -51,9 +51,20 @@ class BasePlugin(Printer):
         self._plugin_name = args
         self.root = False
         self.required_params = Parameters()
+        self.info = {}
 
     def _set_required_params(self, **kwargs):
         self.required_params.set_values(**kwargs)
+
+    def _set_info(self, **kwargs):
+        self.info = kwargs
+
+    def _set_root(self, root):
+        self.root = root
+
+    def print_info(self):
+        for field in sorted(self.info):
+            print('{}: {}'.format(field, self.info[field]))
 
     def print_exception(self, line=''):
         # if self._global_options['debug']:

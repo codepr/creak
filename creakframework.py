@@ -68,6 +68,7 @@ class CreakFramework(Cmd, Printer):
         self.params = {}
         # self._global_options = {'debug': True}
         self.current = None
+        self.framework_info = {'author': 'codep', 'version': '1.0'}
 
     def _load_plugin(self, dirpath, filename):
         plug_name = filename.split('.')[0]
@@ -124,7 +125,7 @@ class CreakFramework(Cmd, Printer):
 
     def init_framework(self):
         self._load_plugins()
-        self.prompt = self._prompt_template % ('creak', 'default')
+        self.prompt = self._prompt_template % ('creak', 'base')
         print("Loaded %s plugins " % len(self._loaded_plugins))
         return True
 
@@ -181,7 +182,7 @@ class CreakFramework(Cmd, Printer):
         plugin.init_plugin()
         self.current = plugin
         # self.required_params = plugin.required_params
-        self.prompt = self._prompt_template % (self.prompt[:-12], plug_dispname.split('/')[-1])
+        self.prompt = self._prompt_template % (self.prompt[:10], plug_dispname.split('/')[-1])
 
     def do_set(self, args):
         '''Sets module options'''
@@ -215,11 +216,17 @@ class CreakFramework(Cmd, Printer):
         except Exception:
             self.print_exception()
 
-    def do_back(self, args):
+    def do_showinfo(self, args):
+        if self.current:
+            self.current.print_info()
+        else:
+            for field in sorted(self.framework_info):
+                print('{}: {}'.format(field, self.framework_info[field]))
+
+    def do_clean(self, args):
         '''Exits the current context'''
         self.params = {}
         self.current = None
-        return True
 
     def do_quit(self, args):
         print('Quitting..')

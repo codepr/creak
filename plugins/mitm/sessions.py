@@ -36,8 +36,12 @@ from baseplugin import BasePlugin
 class Plugin(BasePlugin):
 
     def init_plugin(self):
+        self._set_info(
+            author='codep',
+            version='1.0',
+            description='List all TCP sessions of a (list) of target(s) inside a subnet')
         self._set_required_params(dev=True, target=True, gateway=True, src_mac=False, port=False)
-        self.root = True
+        self._set_root(True)
 
     def _build_pcap_filter(self, prefix, target):
         """ build the pcap filter based on arguments target and port"""
