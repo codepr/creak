@@ -29,14 +29,15 @@ except ImportError:
           "or install missing modules")
 import creak.config as config
 import creak.utils as utils
-from creakframework import CreakFramework
+from baseplugin import BasePlugin
 
 (G, W, R) = (utils.G, utils.W, utils.R)
 
-class Plugin(CreakFramework):
+class Plugin(BasePlugin):
 
     def init_plugin(self):
         self._set_required_params(dev=True, target=True, gateway=True, src_mac=False, port=False)
+        self.root = True
 
     def _build_pcap_filter(self, prefix, target):
         """ build the pcap filter based on arguments target and port"""
@@ -62,8 +63,8 @@ class Plugin(CreakFramework):
         try:
             while True:
                 if config.VERBOSE is True:
-                    self.print_output('[+] %s <-- %s -- %s -- %s --> %s',
-                          gateway, target, dev, gateway, target)
+                    self.print_output('%s <-- %s -- %s -- %s --> %s',
+                                      gateway, target, dev, gateway, target)
                     if not isinstance(target, list):
                         sock.send(str(utils.build_arp_packet(
                             src_mac, gateway, target)))
@@ -77,7 +78,7 @@ class Plugin(CreakFramework):
                         time.sleep(delay) # OS refresh ARP cache really often
 
         except KeyboardInterrupt:
-            self.print_output('\n\r[+] Poisoning interrupted')
+            self.print_output('\n\rPoisoning interrupted')
             sock.close()
 
     def restore(self, dev, gateway, target):
@@ -132,9 +133,9 @@ class Plugin(CreakFramework):
                                args=(kwargs['dev'], source, kwargs['gateway'], kwargs['target'], 2,))
         poison_thread.daemon = True
         poison_thread.start()
-        self.print_output('[+] Start poisoning on ' + G + kwargs['dev'] + W + ' between ' + G + source + W
-              + ' and ' + R
-              + (','.join(kwargs['target']) if isinstance(kwargs['target'], list) else kwargs['target']) + W +'\n')
+        self.print_output('Start poisoning on ' + G + kwargs['dev'] + W + ' between ' + G
+                          + source + W + ' and ' + R
+                          + (','.join(kwargs['target']) if isinstance(kwargs['target'], list) else kwargs['target']) + W +'\n')
         sessions = {}
         try:
             for _, pkt in packets:
@@ -161,6 +162,6 @@ class Plugin(CreakFramework):
                             self.print_output(" [{:^5}] {} : {}".format(len(sessions), sess, sessions[sess]))
 
         except KeyboardInterrupt:
-            self.print_output('[+] Session scan interrupted\n\r')
+            self.print_output('Session scan interrupted\n\r')
             self.restore(kwargs['dev'], kwargs['gateway'], kwargs['target'])
             utils.set_ip_forward(0)

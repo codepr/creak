@@ -30,37 +30,44 @@ R = '\033[31m' # red
 G = '\033[32m' # green
 O = '\033[33m' # orange
 B = '\033[34m' # blue
+C = '\033[36m' # cyan
+W = '\033[97m' # white
+BOLD = '\033[1m'
 
-class Parameters(dict):
+class Printer(object):
 
-    def __init__(self, *args, **kwargs):
-        super(Parameters, self).__init__(*args, **kwargs)
+    @staticmethod
+    def print_exception(line=''):
+        # if self._global_options['debug']:
+        traceback.print_exc()
+        Printer.error(line)
 
-    def __setitem__(self, key, value):
-        super(Parameters, self).__setitem__(key, value)
+    @staticmethod
+    def error(line):
+        '''Formats and presents errors.'''
+        if not re.search('[.,;!?]$', line):
+            line += '.'
+        line = line[:1].upper() + line[1:]
+        print('%s[!] %s%s' % (R, line, N))
 
-    def __delitem__(self, key):
-        super(Parameters, self).__delitem__(key)
+    @staticmethod
+    def print_output(line):
+        '''Formats and presents normal output.'''
+        print('%s[*]%s %s' % (C, N, line))
 
-    def set_values(self, **kwargs):
-        for arg in kwargs:
-            self.__setitem__(arg, kwargs[arg])
-
-class CreakFramework(Cmd):
+class CreakFramework(Cmd, Printer):
 
     def __init__(self, args):
         Cmd.__init__(self)
-        # self.app_path = sys.path[0]
+        self.app_path = sys.path[0]
         self._loaded_plugins = {}
+        self.loaded_category = {}
         self._plugin_name = args
-        self._prompt_template = '%s::%s > '
-        self.time_format = '%Y-%m-%d %H:%M:%S'
-        # self.required_params = Parameters()
+        self._prompt_template = W + '%s::%s > ' + N
+        # self.time_format = '%Y-%m-%d %H:%M:%S'
         self.params = {}
-        self.doc_header = 'Commands (type [help|?] <topic>):'
-        self.rpc_cache = []
-        self._exit = 0
-        self._global_options = {'debug': True}
+        # self._global_options = {'debug': True}
+        self.current = None
 
     def _load_plugin(self, dirpath, filename):
         plug_name = filename.split('.')[0]
@@ -108,12 +115,9 @@ class CreakFramework(Cmd):
 
                         self.loaded_category[plug_category] += 1
 
-    def _set_required_params(self, **kwargs):
-        self.required_params.set_values(**kwargs)
-
     def _validate_params(self):
-        for param in self.required_params:
-            if self.required_params[param] is True and param not in self.params:
+        for param in self.current.required_params:
+            if self.current.required_params[param] is True and param not in self.params:
                 print('Value required for mandatory \'%s\' parameter.' % (param.upper()))
                 return False
         return True
@@ -127,39 +131,23 @@ class CreakFramework(Cmd):
     def default(self, line):
         self.do_shell(line)
 
-    def postcmd(self, stop, line):
-        if hasattr(self, 'output') and self.output:
-            print(self.output)
-            self.output = None
-
-        return stop
-
     def parseline(self, line):
         if '|' in line:
             return 'pipe', line.split('|'), line
-
         return Cmd.parseline(self, line)
-
-    def print_exception(self, line=''):
-        if self._global_options['debug']:
-            traceback.print_exc()
-        self.error(line)
-
-    def error(self, line):
-        '''Formats and presents errors.'''
-        if not re.search('[.,;!?]$', line):
-            line += '.'
-        line = line[:1].upper() + line[1:]
-        print('%s[!] %s%s' % (R, line, N))
-
-    def print_output(self, line):
-        '''Formats and presents normal output.'''
-        print('%s[*]%s %s' % (B, N, line))
 
     def do_shell(self, line):
         "Run a shell command"
         output = os.popen(line).read()
-        self.output = output
+        if line == 'ls':
+            files = output.split('\n')
+            for f in files:
+                if os.path.isdir(f):
+                    print('{}{}{}{}'.format(BOLD, B, f, N))
+                else:
+                    print(f)
+        else:
+            print('\n%s' % output)
 
     def do_pipe(self, args):
         buffer = None
@@ -169,8 +157,8 @@ class CreakFramework(Cmd):
                 # This command just adds the output of a previous command as the last argument
                 s += ' ' + buffer
 
-            self.onecmd(s)
-            buffer = self.output
+            # self.onecmd(s)
+            # buffer = self.output
 
     def do_load(self, args):
         '''Loads specified module'''
@@ -191,28 +179,15 @@ class CreakFramework(Cmd):
         # loop to support reload logic
         plugin = self._loaded_plugins[plug_dispname]
         plugin.init_plugin()
-        self.required_params = plugin.required_params
+        self.current = plugin
+        # self.required_params = plugin.required_params
         self.prompt = self._prompt_template % (self.prompt[:-12], plug_dispname.split('/')[-1])
-        # while True:
-        #     y = self._loaded_plugins[plug_dispname]
-        #     y.init_plugin()
-        #     # send analytics information
-        #     plug_loadpath = os.path.abspath(sys.modules[y.__module__].__file__)
-        #     # begin a command loop
-        #     y.prompt = self._prompt_template % (self.prompt[:-12], plug_dispname.split('/')[-1])
-        #     try:
-        #         y.cmdloop()
-        #     except KeyboardInterrupt:
-        #         print('')
-        #     if y._exit == 1:
-        #         return True
-        #     break
 
     def do_set(self, args):
         '''Sets module options'''
         params = args.split()
         name = params[0].lower()
-        if name in self.required_params:
+        if name in self.current.required_params:
             value = ' '.join(params[1:])
             self.params[name] = value
             print('%s => %s' % (name.upper(), value))
@@ -228,8 +203,11 @@ class CreakFramework(Cmd):
         try:
             self._summary_counts = {}
             is_valid = self._validate_params()
-            if is_valid is True:
-                self.run(self.params)
+            if is_valid:
+                if self.current.root and os.geteuid() != 0:
+                    self.error('Root permissions required')
+                    return
+                self.current.run(self.params)
             else:
                 return
         except KeyboardInterrupt:
@@ -240,6 +218,7 @@ class CreakFramework(Cmd):
     def do_back(self, args):
         '''Exits the current context'''
         self.params = {}
+        self.current = None
         return True
 
     def do_quit(self, args):
