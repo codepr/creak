@@ -18,12 +18,15 @@
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
 # USA
 
-from cmd import Cmd
 import os
 import re
 import sys
 import imp
 import traceback
+import subprocess
+import shlex
+from cmd import Cmd
+import creak.utils as utils
 
 N = '\033[m' # native
 R = '\033[31m' # red
@@ -63,12 +66,13 @@ class CreakFramework(Cmd, Printer):
         self._loaded_plugins = {}
         self.loaded_category = {}
         self._plugin_name = args
-        self._prompt_template = W + '%s::%s > ' + N
+        self._prompt_template = W + '[%s::%s] > ' + N
         # self.time_format = '%Y-%m-%d %H:%M:%S'
         self.params = {}
         # self._global_options = {'debug': True}
         self.current = None
         self.framework_info = {'author': 'codep', 'version': '1.0'}
+        self.base_params = {}
 
     def _load_plugin(self, dirpath, filename):
         plug_name = filename.split('.')[0]
@@ -118,7 +122,9 @@ class CreakFramework(Cmd, Printer):
 
     def _validate_params(self):
         for param in self.current.required_params:
-            if self.current.required_params[param] is True and param not in self.params:
+            if self.current.required_params[param] is True and param not in self.params and param in self.base_params:
+                self.params[param] = self.base_params[param]
+            elif self.current.required_params[param] is True and param not in self.params:
                 print('Value required for mandatory \'%s\' parameter.' % (param.upper()))
                 return False
         return True
@@ -126,7 +132,19 @@ class CreakFramework(Cmd, Printer):
     def init_framework(self):
         self._load_plugins()
         self.prompt = self._prompt_template % ('creak', 'base')
-        print("Loaded %s plugins " % len(self._loaded_plugins))
+        print('')
+        self.print_output('Loaded %s plugins ' % len(self._loaded_plugins))
+        strs = subprocess.check_output(shlex.split('ip r l'))
+        gateway = strs.split('default via')[-1].split()[0]
+        dev = strs.split('dev')[-1].split()[0]
+        ip  = strs.split('src')[-1].split()[0]
+        mac_addr = utils.get_mac_by_dev(dev)
+        self.base_params['dev'], self.base_params['gateway'], self.base_params['localip'] = dev, gateway, ip
+        if mac_addr:
+            self.base_params['mac_addr'] = mac_addr
+        self.print_output('Detected some informations\n')
+        for param in sorted(self.base_params):
+            print(' {}{:.<12}{}{:.>15}{}{}'.format(BOLD, param, N, W, self.base_params[param], N))
         return True
 
     def default(self, line):
@@ -182,7 +200,7 @@ class CreakFramework(Cmd, Printer):
         plugin.init_plugin()
         self.current = plugin
         # self.required_params = plugin.required_params
-        self.prompt = self._prompt_template % (self.prompt[:10], plug_dispname.split('/')[-1])
+        self.prompt = self._prompt_template % (self.prompt[6:11], plug_dispname.split('/')[-1])
 
     def do_set(self, args):
         '''Sets module options'''
@@ -235,4 +253,4 @@ class CreakFramework(Cmd, Printer):
 if __name__ == '__main__':
     prompt = CreakFramework('CreakShell')
     prompt.init_framework()
-    prompt.cmdloop('Starting prompt...')
+    prompt.cmdloop('\nStarting prompt...\n')

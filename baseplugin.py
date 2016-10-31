@@ -28,6 +28,8 @@ G = '\033[32m' # green
 O = '\033[33m' # orange
 B = '\033[34m' # blue
 C = '\033[36m' # cyan
+W = '\033[97m' # white
+BOLD = '\033[1m'
 
 class Parameters(dict):
 
@@ -63,8 +65,10 @@ class BasePlugin(Printer):
         self.root = root
 
     def print_info(self):
+        print('')
         for field in sorted(self.info):
-            print('{}: {}'.format(field, self.info[field]))
+            print('{}{}{}: {}'.format(BOLD, field, N, self.info[field]))
+        print('')
 
     def print_exception(self, line=''):
         # if self._global_options['debug']:
@@ -81,3 +85,9 @@ class BasePlugin(Printer):
     def print_output(self, line):
         '''Formats and presents normal output.'''
         print('%s[*]%s %s' % (C, N, line))
+
+    def init_plugin(self):
+        raise NotImplementedError('not implemented')
+
+    def run(self):
+        raise NotImplementedError('not implemented')
