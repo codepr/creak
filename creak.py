@@ -62,6 +62,8 @@ def parse_arguments():
                         help='Sessions scan mode')
     parser.add_argument('-2', '--dns-spoof', action='store_const', const=2, dest='mode',
                         help='Dns spoofing')
+    parser.add_argument('-3', '--hijack-session', action='store_const', const=3, dest='mode',
+                        help='Session hijack')
     parser.add_argument('-x', '--spoof', action='store_true', default=False, dest='spoof',
                         help='Spoof mode, generate a fake MAC address to be used during attack')
     parser.add_argument('-m', dest='macaddr',
@@ -182,6 +184,9 @@ def main():
         if not args.redir:
             exit("[!] Missing redirection")
         mitm.dns_spoof(args.host, args.redir)
+
+    elif args.mode == 3:
+        mitm.hijack_session()
 
     else:
         if args.port:

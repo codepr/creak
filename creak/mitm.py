@@ -17,6 +17,7 @@
 
 """ Mitm main module, contains classes responsible for the attacks """
 
+import re
 import time
 import logging as log
 from socket import socket, inet_ntoa, gethostbyname, PF_PACKET, SOCK_RAW
@@ -56,6 +57,7 @@ class Mitm(object):
         self.src_mac = source_mac
         self.gateway = gateway
         self.target = target
+        self.sessions = []
 
     def _build_pcap_filter(self, prefix, port=None):
         """ build the pcap filter based on arguments self.target and port"""
@@ -221,6 +223,7 @@ class Mitm(object):
                             check = True
 
                         sessions[sess] = "Others"
+                        self.sessions.append(sess)
 
                         if tcp.sport in notorious_services:
                             sessions[sess] = notorious_services[tcp.sport]
@@ -308,6 +311,20 @@ class Mitm(object):
             print('[+] DNS spoofing interrupted\n\r')
             self.restore(2)
             utils.set_ip_forward(0)
+
+    def hijack_session(self, port=None):
+        list_conn_thread = Thread(target=self.list_sessions, args=(port,))
+        list_conn_thread.start()
+        choice = None
+        while True:
+            print(self.sessions)
+            choice = raw_input("sees")
+            if choice <= len(self.sessions) and choice > -1:
+                break
+        # must stop thread
+        src_ip, src_port, dst_ip, dst_port = re.search(r'^([0-9.]+):(\d+) <-> ([0-9.]+):(\d+)$/', self.sessions[choice])
+        print("\n[*] Hijacking: {}:{} --> {}:{}".format(src_ip, src_port, dst_ip, dst_port))
+        # pcap_filter = self._build_pcap_filter("src host {} and src port {} and dst host $hj_src_ip and dst port $hj_src_port and tcp".format(dst_ip, port))
 
     def poison(self, delay):
         """
