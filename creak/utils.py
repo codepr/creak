@@ -83,12 +83,12 @@ def get_mac_by_dev(dev):
     """ try to retrieve MAC address associated with device """
     try:
         sock_fd = socket(AF_INET, SOCK_DGRAM)
-        info = fcntl.ioctl(sock_fd.fileno(), 0x8927, struct.pack('256s', str(dev[:15])))
+        info = fcntl.ioctl(sock_fd.fileno(), 0x8927, struct.pack('256s', bytes(dev[:15], 'utf-8')))
         return ''.join(['%02x:' % ord(char) for char in info[18:24]])[:-1]
-    except IOError:
+    except (IOError, TypeError):
         sock_fd.close()
         mac_addr = hex(uuid.getnode()).replace('0x', '')
-        return ':'.join(mac_addr[i : i + 2] for i in range(0, 11, 2))
+    return ':'.join(mac_addr[i : i + 2] for i in range(0, 11, 2))
 
 def get_mac_by_ip(ip_addr):
     """ try to retrieve MAC address associated with ip """

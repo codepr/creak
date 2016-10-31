@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """ general configuration file """
-SCAPY                    = False
+SCAPY                    = True
 VERBOSE                  = False
 DOTTED                   = False
 # ip_forward path

