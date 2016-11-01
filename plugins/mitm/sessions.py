@@ -102,7 +102,7 @@ class Plugin(BasePlugin):
                     sock.send(str(utils.build_arp_packet(target_mac, gateway, addr)))
                     sock.send(str(utils.build_arp_packet(source_mac, addr, gateway)))
 
-    def run(self, kwargs):
+    def run(self, stop, kwargs):
         """
         Try to get all TCP sessions of the target
         """
@@ -143,6 +143,8 @@ class Plugin(BasePlugin):
         sessions = {}
         try:
             for _, pkt in packets:
+                if stop():
+                    break
                 eth = dpkt.ethernet.Ethernet(pkt)
                 ip_packet = eth.data
                 if ip_packet.p == dpkt.ip.IP_PROTO_TCP:
