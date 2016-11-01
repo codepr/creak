@@ -23,7 +23,7 @@ from socket import socket, PF_PACKET, SOCK_RAW
 try:
     import dpkt
 except ImportError:
-    print("[!] Missing modules pcap or dpkt, try setting SCAPY to True in config.py "
+    print("[!] Missing module dpkt, try setting SCAPY to True in config.py "
           "or install missing modules")
 from baseplugin import BasePlugin
 import creak.utils as utils

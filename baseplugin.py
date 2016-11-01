@@ -69,31 +69,14 @@ class BasePlugin(Printer):
         self.print_output('{}General infos:{}\n'.format(BOLD, N))
         for field in sorted(self.info):
             print('{}{}{}: {}'.format(BOLD, field, N, self.info[field]))
-            # print(' {}{:<22}{}{:>15}'.format(BOLD, field, N, self.info[field]))
         print('')
         self.print_output('{}Parameters{}\n'.format(BOLD, N))
-        for param in self.required_params:
+        for param in sorted(self.required_params):
             required = 'optional'
             if self.required_params[param] is True:
                 required = 'required'
             print('{}{:.<12}{}{:.>15}{}{}'.format(BOLD, param, N, W, required, N))
         print('')
-
-    def print_exception(self, line=''):
-        # if self._global_options['debug']:
-        #     traceback.print_exc()
-        self.error(line)
-
-    def error(self, line):
-        '''Formats and presents errors.'''
-        if not re.search('[.,;!?]$', line):
-            line += '.'
-        line = line[:1].upper() + line[1:]
-        print('%s[!] %s%s' % (R, line, N))
-
-    def print_output(self, line):
-        '''Formats and presents normal output.'''
-        print('%s[*]%s %s' % (C, N, line))
 
     def init_plugin(self):
         """

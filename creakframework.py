@@ -42,14 +42,15 @@ class Printer(object):
 
     @staticmethod
     def print_exception(line=''):
+        """ Display formatted exceptions """
         # if self._global_options['debug']:
         # traceback.print_exc()
         line = ' '.join([x for x in [traceback.format_exc().strip().splitlines()[-1], line] if x])
         Printer.error(line)
 
     @staticmethod
-    def error(line):
-        '''Formats and presents errors.'''
+    def print_error(line):
+        """ Display fomatted errors """
         if not re.search('[.,;!?]$', line):
             line += '.'
         line = line[:1].upper() + line[1:]
@@ -57,7 +58,7 @@ class Printer(object):
 
     @staticmethod
     def print_output(line):
-        '''Formats and presents normal output.'''
+        """ Display formatted output """
         print('%s[*]%s %s' % (C, N, line))
 
 class CreakFramework(Cmd, Printer):
@@ -69,9 +70,7 @@ class CreakFramework(Cmd, Printer):
         self._loaded_category = {}
         self._plugin_name = args
         self._prompt_template = W + '[%s::%s] > ' + N
-        # self.time_format = '%Y-%m-%d %H:%M:%S'
         self.params = {}
-        # self._global_options = {'debug': True}
         self.current = None
         self.framework_info = {'author': 'codep', 'version': '1.0'}
         self.base_params = {}
@@ -91,11 +90,11 @@ class CreakFramework(Cmd, Printer):
             return True
         except ImportError as ex:
             # notify the user of missing dependencies
-            self.error('Plugin \'%s\' disabled. Dependency required: \'%s\'' % (plug_dispname, ex))
+            self.print_error('Plugin \'%s\' disabled. Dependency required: \'%s\'' % (plug_dispname, ex))
         except:
             # notify the user of errors
             self.print_exception()
-            self.error('Plugin \'%s\' disabled.' % (plug_dispname))
+            self.print_error('Plugin \'%s\' disabled.' % (plug_dispname))
 
         # remove the module from the framework's loaded modules
         self._loaded_plugins.pop(plug_dispname, None)
@@ -139,13 +138,14 @@ class CreakFramework(Cmd, Printer):
         self._load_plugins()
         self.prompt = self._prompt_template % ('creak', 'base')
         print('')
-        self.print_output('Loaded %s plugins ' % len(self._loaded_plugins))
-        self.print_output('Categories:\n')
+        print(' Author: Andrea Giacomo Baldan (https://github.com/codepr)\n')
+        print(' Loaded %s plugins ' % len(self._loaded_plugins))
+        print(' Categories:\n')
         for category in sorted(self._loaded_category):
             if category != 'disabled':
-                self.print_output('{}{}({}){}'.format(G, category, len(self._loaded_category[category]), N))
+                print(' {}{}({}){}'.format(G, category, len(self._loaded_category[category]), N))
             else:
-                self.print_output('{}{}({}){}'.format(R, category, len(self._loaded_category[category]), N))
+                print(' {}{}({}){}'.format(R, category, len(self._loaded_category[category]), N))
             for plugin in self._loaded_category[category]:
                 if category != 'disabled':
                     print('     + {}{}{}'.format(G, plugin, N))
@@ -161,7 +161,7 @@ class CreakFramework(Cmd, Printer):
         if mac_addr:
             self.base_params['mac_addr'] = mac_addr
         print('')
-        self.print_output('Detected some informations\n')
+        print(' Detected some informations\n')
         for param in sorted(self.base_params):
             print(' {}{:.<12}{}{:.>15}{}{}'.format(BOLD, param, N, W, self.base_params[param], N))
         return True
@@ -211,7 +211,7 @@ class CreakFramework(Cmd, Printer):
         # notify the user if none or multiple plugins are found
         if len(plugins) != 1:
             if not plugins:
-                self.error('Invalid module name.')
+                self.print_error('Invalid module name.')
             else:
                 self.print_output('Multiple plugins match \'%s\'.' % args)
             return
@@ -233,7 +233,7 @@ class CreakFramework(Cmd, Printer):
             self.params[name] = value
             print('%s => %s' % (name.upper(), value))
         else:
-            self.error('Invalid parameter.')
+            self.print_error('Invalid parameter.')
 
     def do_unset(self, args):
         '''Unsets module params'''
@@ -246,7 +246,7 @@ class CreakFramework(Cmd, Printer):
             is_valid = self._validate_params()
             if is_valid:
                 if self.current.root and os.geteuid() != 0:
-                    self.error('Root permissions required')
+                    self.print_error('Root permissions required')
                     return
                 self.current.run(self.params)
             else:
@@ -256,6 +256,23 @@ class CreakFramework(Cmd, Printer):
         except Exception:
             self.print_exception()
 
+    def do_recap(self, args):
+        """ Display all params set for the current plugin """
+        if self.current:
+            required_params = self.current.required_params
+            print('')
+            print(self.params)
+            self.print_output('{}Recap:{}\n'.format(BOLD, N))
+            for field in sorted(required_params):
+                required = 'optional'
+                if required_params[field] is True:
+                    required = 'required'
+                if field in  self.params:
+                    print(' {:<8} => {:>12} ({})'.format(field.upper(), self.params[field], required))
+                else:
+                    print(' {:<8} => UNSET ({})'.format(field.upper(), required))
+            print('')
+
     def do_showinfo(self, args):
         if self.current:
             self.current.print_info()
@@ -264,7 +281,7 @@ class CreakFramework(Cmd, Printer):
                 print('{}: {}'.format(field, self.framework_info[field]))
 
     def do_clean(self, args):
-        '''Exits the current context'''
+        """ Clean up all params """
         self.params = {}
         self.current = None
 
@@ -276,6 +293,6 @@ class CreakFramework(Cmd, Printer):
     do_q = do_quit
 
 if __name__ == '__main__':
-    prompt = CreakFramework('CreakShell')
-    prompt.init_framework()
-    prompt.cmdloop('\nStarting prompt...\n')
+    CREAK_PROMPT = CreakFramework('CreakShell')
+    CREAK_PROMPT.init_framework()
+    CREAK_PROMPT.cmdloop()
