@@ -26,7 +26,7 @@ from distutils.core import setup
 if __name__ == '__main__':
     setup(
         name='creak',
-        version='1.0.0',
+        version='1.0.3',
         description=__doc__,
         long_description=__doc__,
         author='Andrea Giacomo Baldan',
