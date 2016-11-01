@@ -178,7 +178,7 @@ def main():
     (args, changed, original_mac_addr, mitm) = get_mitm(parse_arguments())
 
     if args.mode == 1:
-        mitm.list_sessions(args.port)
+        mitm.list_sessions(False, args.port)
 
     elif args.mode == 2:
         if not args.redir:

