@@ -25,6 +25,7 @@ Options:
   -h, --help           show this help message and exit
   -1, --sessions-scan  Sessions scan mode
   -2, --dns-spoof      Dns spoofing
+  -3, --session-hijack Try to steal a TCP sessions by desynchronization (old technique)
   -x, --spoof          Spoof mode, generate a fake MAC address to be used
                        during attack
   -m MACADDR           Mac address octet prefix (could be an entire MAC
@@ -63,7 +64,7 @@ def parse_arguments():
     parser.add_argument('-2', '--dns-spoof', action='store_const', const=2, dest='mode',
                         help='Dns spoofing')
     parser.add_argument('-3', '--hijack-session', action='store_const', const=3, dest='mode',
-                        help='Session hijack')
+                        help='Session hijack through desynchronization')
     parser.add_argument('-x', '--spoof', action='store_true', default=False, dest='spoof',
                         help='Spoof mode, generate a fake MAC address to be used during attack')
     parser.add_argument('-m', dest='macaddr',
@@ -186,7 +187,7 @@ def main():
         mitm.dns_spoof(args.host, args.redir)
 
     elif args.mode == 3:
-        mitm.hijack_session()
+        mitm.hijack_session(args.source)
 
     else:
         if args.port:

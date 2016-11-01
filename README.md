@@ -3,7 +3,8 @@
 Deny navigation and download capabilities of a target host in the local network
 performing an ARP poison attack and sending reset TCP packets to every request
 made to the router.
-Born as a didactic project for learning python language, i decline every responsibility for any abuse.
+Born as a didactic project for learning python language, I decline every
+responsibility for any abuse or malevolent use of this code.
 
 ## Installation
 
@@ -34,6 +35,7 @@ Options:
   -h, --help           show this help message and exit
   -1, --sessions-scan  Sessions scan mode
   -2, --dns-spoof      Dns spoofing
+  -3, --session-hijack Try to steal a TCP sessions by desynchronization (old technique)
   -x, --spoof          Spoof mode, generate a fake MAC address to be used
                        during attack
   -m MACADDR           Mac address octet prefix (could be an entire MAC
@@ -107,7 +109,8 @@ See the [CHANGELOG](CHANGELOG.md) file.
 
 - Complete `Scapy` support
 - Sessions grouping based on active load usage
-- Sessions hijacking
+- Sessions hijacking (**started**)
+- Port to a micro-framework wih plugin architecture (**started**)
 
 ## License
 

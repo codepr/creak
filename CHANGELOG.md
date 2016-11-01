@@ -1,3 +1,17 @@
+#### 1.0.2 - 2016-11-01
+
+- Evaluating the possibility of transforming `creak` in a micro-framework using
+  plugin architecture in order to achieve better maintenability and extension
+  capabilities, this should be easy to do in python
+
+##### Added
+
+- Started hijack session option, still bugged and malfunctioning
+
+##### Changed
+
+- Fixed some bugs and updated requirements.txt
+
 #### 1.0.1 - 2016-10-28
 
 ##### Added
