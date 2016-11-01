@@ -28,13 +28,14 @@ import shlex
 from cmd import Cmd
 import creak.utils as utils
 
-N = '\033[m' # native
+N = '\033[m'   # native
 R = '\033[31m' # red
 G = '\033[32m' # green
 O = '\033[33m' # orange
 B = '\033[34m' # blue
 C = '\033[36m' # cyan
 W = '\033[97m' # white
+U = '\033[4m'  # underlined
 BOLD = '\033[1m'
 
 class Printer(object):
@@ -42,7 +43,8 @@ class Printer(object):
     @staticmethod
     def print_exception(line=''):
         # if self._global_options['debug']:
-        traceback.print_exc()
+        # traceback.print_exc()
+        line = ' '.join([x for x in [traceback.format_exc().strip().splitlines()[-1], line] if x])
         Printer.error(line)
 
     @staticmethod
@@ -51,7 +53,7 @@ class Printer(object):
         if not re.search('[.,;!?]$', line):
             line += '.'
         line = line[:1].upper() + line[1:]
-        print('%s[!] %s%s' % (R, line, N))
+        print('%s%s[!] %s%s' % (U, R, line, N))
 
     @staticmethod
     def print_output(line):
@@ -64,7 +66,7 @@ class CreakFramework(Cmd, Printer):
         Cmd.__init__(self)
         self.app_path = sys.path[0]
         self._loaded_plugins = {}
-        self.loaded_category = {}
+        self._loaded_category = {}
         self._plugin_name = args
         self._prompt_template = W + '[%s::%s] > ' + N
         # self.time_format = '%Y-%m-%d %H:%M:%S'
@@ -100,7 +102,7 @@ class CreakFramework(Cmd, Printer):
         return False
 
     def _load_plugins(self):
-        self.loaded_category = {}
+        self._loaded_category = {}
         # crawl the module directory and build the module tree
         for path in [os.path.join(x, 'plugins') for x in (self.app_path, self.app_path)]:
             for dirpath, dirnames, filenames in os.walk(path):
@@ -115,10 +117,10 @@ class CreakFramework(Cmd, Printer):
                             plug_category = re.search('/plugins/([^/]*)', dirpath).group(1)
 
                         # store the resulting category statistics
-                        if not plug_category in self.loaded_category:
-                            self.loaded_category[plug_category] = 0
-
-                        self.loaded_category[plug_category] += 1
+                        if not plug_category in self._loaded_category:
+                            self._loaded_category[plug_category] = [filename]
+                        elif filename not in self._loaded_category[plug_category]:
+                            self._loaded_category[plug_category].append(filename)
 
     def _validate_params(self):
         for param in self.current.required_params:
@@ -130,22 +132,42 @@ class CreakFramework(Cmd, Printer):
         return True
 
     def init_framework(self):
+        """
+        Init the framework, loading all plugins and setting all class variables,
+        trying also to retrieve some basic info from the system
+        """
         self._load_plugins()
         self.prompt = self._prompt_template % ('creak', 'base')
         print('')
         self.print_output('Loaded %s plugins ' % len(self._loaded_plugins))
+        self.print_output('Categories:\n')
+        for category in sorted(self._loaded_category):
+            if category != 'disabled':
+                self.print_output('{}{}({}){}'.format(G, category, len(self._loaded_category[category]), N))
+            else:
+                self.print_output('{}{}({}){}'.format(R, category, len(self._loaded_category[category]), N))
+            for plugin in self._loaded_category[category]:
+                if category != 'disabled':
+                    print('     + {}{}{}'.format(G, plugin, N))
+                else:
+                    print('     + {}{}{}'.format(R, plugin, N))
+            print('')
         strs = subprocess.check_output(shlex.split('ip r l'))
         gateway = strs.split('default via')[-1].split()[0]
         dev = strs.split('dev')[-1].split()[0]
-        ip  = strs.split('src')[-1].split()[0]
+        localip = strs.split('src')[-1].split()[0]
         mac_addr = utils.get_mac_by_dev(dev)
-        self.base_params['dev'], self.base_params['gateway'], self.base_params['localip'] = dev, gateway, ip
+        self.base_params['dev'], self.base_params['gateway'], self.base_params['localip'] = dev, gateway, localip
         if mac_addr:
             self.base_params['mac_addr'] = mac_addr
+        print('')
         self.print_output('Detected some informations\n')
         for param in sorted(self.base_params):
             print(' {}{:.<12}{}{:.>15}{}{}'.format(BOLD, param, N, W, self.base_params[param], N))
         return True
+
+    def emptyline(self):
+        pass
 
     def default(self, line):
         self.do_shell(line)
@@ -249,6 +271,9 @@ class CreakFramework(Cmd, Printer):
     def do_quit(self, args):
         print('Quitting..')
         raise SystemExit
+
+    do_exit = do_quit
+    do_q = do_quit
 
 if __name__ == '__main__':
     prompt = CreakFramework('CreakShell')

