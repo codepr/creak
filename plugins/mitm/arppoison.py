@@ -48,7 +48,7 @@ class Plugin(BasePlugin):
         sock = socket(PF_PACKET, SOCK_RAW)
         sock.bind((kwargs['dev'], dpkt.ethernet.ETH_TYPE_ARP))
         try:
-            while not kwargs['stop']:
+            while not kwargs['stop']():
                 if config.VERBOSE is True:
                     self.print_output('%s <-- %s -- %s -- %s --> %s',
                                       kwargs['gateway'], kwargs['target'], kwargs['dev'], kwargs['gateway'], kwargs['target'])

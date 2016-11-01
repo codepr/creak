@@ -96,7 +96,12 @@ class BasePlugin(Printer):
         print('%s[*]%s %s' % (C, N, line))
 
     def init_plugin(self):
+        """
+        Initialization settings, like meta data and description of the plugin,
+        required parameters, required permissions etc.
+        """
         raise NotImplementedError('not implemented')
 
     def run(self):
+        """ Here the code of the plugin """
         raise NotImplementedError('not implemented')
