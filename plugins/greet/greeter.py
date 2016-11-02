@@ -10,8 +10,10 @@ class Plugin(BasePlugin):
             author='codep',
             version='1.0',
             description='Greets the user')
-        self._set_required_params(dev=True, target=True, gateway=True, src_mac=False, delay=False, stop=False)
+        self._set_required_params(name=False)
 
     def run(self, kwargs):
         """ I don't do a lot """
+        if 'name' not in kwargs:
+            kwargs['name'] = 'stranger'
         print("Hello %s" % kwargs['name'])

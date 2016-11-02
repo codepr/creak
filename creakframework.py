@@ -40,13 +40,15 @@ BOLD = '\033[1m'
 
 class Printer(object):
 
+    """ Utility class, display different message categories in a custom way """
+
     @staticmethod
     def print_exception(line=''):
         """ Display formatted exceptions """
         # if self._global_options['debug']:
         # traceback.print_exc()
         line = ' '.join([x for x in [traceback.format_exc().strip().splitlines()[-1], line] if x])
-        Printer.error(line)
+        Printer.print_error(line)
 
     @staticmethod
     def print_error(line):
@@ -63,17 +65,18 @@ class Printer(object):
 
 class CreakFramework(Cmd, Printer):
 
+    """ Base class for creak framework, here all plugin are loaded and managed """
+
     def __init__(self, args):
         Cmd.__init__(self)
         self.app_path = sys.path[0]
         self._loaded_plugins = {}
         self._loaded_category = {}
-        self._plugin_name = args
         self._prompt_template = W + '[%s::%s] > ' + N
-        self.params = {}
-        self.current = None
-        self.framework_info = {'author': 'codep', 'version': '1.0'}
-        self.base_params = {}
+        self._params = {}
+        self._current = None
+        self._fwk_info = {'author': 'codep', 'version': '1.0'}
+        self._base_params = {}
 
     def _load_plugin(self, dirpath, filename):
         plug_name = filename.split('.')[0]
@@ -122,10 +125,10 @@ class CreakFramework(Cmd, Printer):
                             self._loaded_category[plug_category].append(filename)
 
     def _validate_params(self):
-        for param in self.current.required_params:
-            if self.current.required_params[param] is True and param not in self.params and param in self.base_params:
-                self.params[param] = self.base_params[param]
-            elif self.current.required_params[param] is True and param not in self.params:
+        for param in self._current.required_params:
+            if self._current.required_params[param] is True and param not in self._params and param in self._base_params:
+                self._params[param] = self._base_params[param]
+            elif self._current.required_params[param] is True and param not in self._params:
                 print('Value required for mandatory \'%s\' parameter.' % (param.upper()))
                 return False
         return True
@@ -138,9 +141,13 @@ class CreakFramework(Cmd, Printer):
         self._load_plugins()
         self.prompt = self._prompt_template % ('creak', 'base')
         print('')
-        print(' Author: Andrea Giacomo Baldan (https://github.com/codepr)\n')
-        print(' Loaded %s plugins ' % len(self._loaded_plugins))
+        print(' Author: Andrea Giacomo Baldan')
+        print('         a.g.baldan@gmail.com')
+        print('         https://github.com/codepr\n')
+        print(' ---------------------------------------\n')
+        print(' Successfully loaded %s plugins ' % len(self._loaded_plugins))
         print(' Categories:\n')
+        print(' ----------------------------------\n')
         for category in sorted(self._loaded_category):
             if category != 'disabled':
                 print(' {}{}({}){}'.format(G, category, len(self._loaded_category[category]), N))
@@ -157,13 +164,17 @@ class CreakFramework(Cmd, Printer):
         dev = strs.split('dev')[-1].split()[0]
         localip = strs.split('src')[-1].split()[0]
         mac_addr = utils.get_mac_by_dev(dev)
-        self.base_params['dev'], self.base_params['gateway'], self.base_params['localip'] = dev, gateway, localip
+        gateway_addr = utils.get_mac_by_ip(gateway)
+        self._base_params['dev'], self._base_params['gateway'] = dev, gateway
+        self._base_params['localip'], self._base_params['gateway_addr'] = localip, gateway_addr
         if mac_addr:
-            self.base_params['mac_addr'] = mac_addr
+            self._base_params['mac_addr'] = mac_addr
         print('')
         print(' Detected some informations\n')
-        for param in sorted(self.base_params):
-            print(' {}{:.<12}{}{:.>15}{}{}'.format(BOLD, param, N, W, self.base_params[param], N))
+        print(' ----------------------------------\n')
+        for param in sorted(self._base_params):
+            print(' {}{:.<12}{}{:.>15}{}{}'.format(BOLD, param, N, W, self._base_params[param], N))
+        print('')
         return True
 
     def emptyline(self):
@@ -203,7 +214,7 @@ class CreakFramework(Cmd, Printer):
 
     def do_load(self, args):
         '''Loads specified module'''
-        self.params = {}
+        self._params = {}
         if not args:
             return
         # finds any plugins that contain args
@@ -220,7 +231,7 @@ class CreakFramework(Cmd, Printer):
         # loop to support reload logic
         plugin = self._loaded_plugins[plug_dispname]
         plugin.init_plugin()
-        self.current = plugin
+        self._current = plugin
         # self.required_params = plugin.required_params
         self.prompt = self._prompt_template % (self.prompt[6:11], plug_dispname.split('/')[-1])
 
@@ -228,9 +239,9 @@ class CreakFramework(Cmd, Printer):
         '''Sets module options'''
         params = args.split()
         name = params[0].lower()
-        if name in self.current.required_params:
+        if name in self._current.required_params:
             value = ' '.join(params[1:])
-            self.params[name] = value
+            self._params[name] = value
             print('%s => %s' % (name.upper(), value))
         else:
             self.print_error('Invalid parameter.')
@@ -242,13 +253,12 @@ class CreakFramework(Cmd, Printer):
     def do_run(self, args):
         '''Runs the module'''
         try:
-            self._summary_counts = {}
             is_valid = self._validate_params()
             if is_valid:
-                if self.current.root and os.geteuid() != 0:
+                if self._current.root and os.geteuid() != 0:
                     self.print_error('Root permissions required')
                     return
-                self.current.run(self.params)
+                self._current.run(self._params)
             else:
                 return
         except KeyboardInterrupt:
@@ -258,37 +268,40 @@ class CreakFramework(Cmd, Printer):
 
     def do_recap(self, args):
         """ Display all params set for the current plugin """
-        if self.current:
-            required_params = self.current.required_params
+        if self._current:
+            required_params = self._current.required_params
             print('')
-            print(self.params)
+            print(self._params)
             self.print_output('{}Recap:{}\n'.format(BOLD, N))
             for field in sorted(required_params):
                 required = 'optional'
                 if required_params[field] is True:
                     required = 'required'
-                if field in  self.params:
-                    print(' {:<8} => {:>12} ({})'.format(field.upper(), self.params[field], required))
+                if field in  self._params:
+                    print(' {:<8} => {:>12} ({})'.format(field.upper(), self._params[field], required))
                 else:
                     print(' {:<8} => UNSET ({})'.format(field.upper(), required))
             print('')
 
     def do_showinfo(self, args):
-        if self.current:
-            self.current.print_info()
+        if self._current:
+            self._current.print_info()
         else:
-            for field in sorted(self.framework_info):
-                print('{}: {}'.format(field, self.framework_info[field]))
+            for field in sorted(self._fwk_info):
+                print('{}: {}'.format(field, self._fwk_info[field]))
 
     def do_clean(self, args):
         """ Clean up all params """
-        self.params = {}
-        self.current = None
+        self._params = {}
+        self._current = None
 
     def do_quit(self, args):
+        """ Exit the application """
         print('Quitting..')
         raise SystemExit
 
+    do_use = do_load
+    do_params = do_recap
     do_exit = do_quit
     do_q = do_quit
 
