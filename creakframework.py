@@ -174,6 +174,9 @@ class CreakFramework(Cmd, Printer):
         print(' ----------------------------------\n')
         for param in sorted(self._base_params):
             print(' {}{:.<12}{}{:.>15}{}{}'.format(BOLD, param, N, W, self._base_params[param], N))
+        if os.getuid() != 0:
+            print('\n {}Most of the features of creak requires root privileges,\n'
+                  ' please reload the framework using sudo or with root privileges{}'.format(O, N))
         print('')
         return True
 
@@ -271,7 +274,6 @@ class CreakFramework(Cmd, Printer):
         if self._current:
             required_params = self._current.required_params
             print('')
-            print(self._params)
             self.print_output('{}Recap:{}\n'.format(BOLD, N))
             for field in sorted(required_params):
                 required = 'optional'
