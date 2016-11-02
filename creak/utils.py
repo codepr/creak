@@ -94,6 +94,17 @@ def get_mac_by_ip(ip_addr):
     """ try to retrieve MAC address associated with ip """
     try:
         subprocess.Popen(["ping", "-c 1", ip_addr], stdout=subprocess.PIPE)
+        time.sleep(0.5)
+        with open("/proc/net/arp") as f_h:
+            for line in f_h:
+                fields = line.strip().split()
+                addr = [x for x in fields if re.match(r'^(\w+:){5}\w+$', x)]
+                if addr:
+                    return addr[0]
+    except OSError:
+        pass
+    try:
+        subprocess.Popen(["ping", "-c 1", ip_addr], stdout=subprocess.PIPE)
         time.sleep(0.5) # just to be sure of the ping response time
         pid = subprocess.Popen(["arp", "-n", ip_addr], stdout=subprocess.PIPE)
         arp_output = pid.communicate()[0]
