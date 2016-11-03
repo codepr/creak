@@ -28,12 +28,17 @@ import random
 import subprocess
 import struct
 import fcntl
+
+if sys.version_info < (3, 0):
+    import urllib2
+else:
+    import urllib.request
+
 try:
     import dpkt
-    import urllib2
     import ConfigParser
 except ImportError:
-    print("[!] Missing modules dpkt or urllib2 or ConfigParser")
+    print("[!] Missing modules dpkt or ConfigParser")
 from socket import socket, inet_aton, inet_ntoa, AF_INET, SOCK_DGRAM
 from scapy.all import ARP, Ether, srp
 import creak.config as config
@@ -205,7 +210,11 @@ def get_manufacturer(manufacturer):
     get a list of MAC octets based on manufacturer fetching data from
     http://anonsvn.wireshark.org/wireshark/trunk/manuf
     """
-    output, m_list = [], None
+    output, m_list, version = [], None, sys.version_info
+    urllib = urllib.request
+
+    if sys.version_info < (3, 0):
+        urllib = urllib2
 
     if not os.path.exists("./manufacturers"):
         os.makedirs("./manufacturers")
@@ -214,7 +223,7 @@ def get_manufacturer(manufacturer):
         print("[+] No local cache data found for " + G + manufacturer + W
               + " found, fetching from web..")
         try:
-            urls = urllib2.urlopen(config.MANUFACTURER_URL)
+            urls = urllib.urlopen(config.MANUFACTURER_URL)
             m_list = open("./manufacturers/list.txt", "w+")
 
             for line in urls:
@@ -223,7 +232,10 @@ def get_manufacturer(manufacturer):
                     man = line.split()[1]
                     if re.search(manufacturer.lower(),
                                  man.lower()) and len(mac) < 17 and len(mac) > 1:
-                        output.append(mac)
+                        if version < (3, 0):
+                            output.append(mac)
+                        else:
+                            output.append(mac.decode('utf-8'))
                 except IndexError:
                     pass
         except:
@@ -242,7 +254,7 @@ def get_manufacturer(manufacturer):
                       + " device")
                 return macs
         except:
-            urls = urllib2.urlopen(config.MANUFACTURER_URL)
+            urls = urllib.urlopen(config.MANUFACTURER_URL)
             m_list = open("./manufacturers/list.txt", "a+")
 
             for line in urls:
@@ -251,7 +263,10 @@ def get_manufacturer(manufacturer):
                     man = line.split()[1]
                     if re.search(manufacturer.lower(),
                                  man.lower()) and len(mac) < 17 and len(mac) > 1:
-                        output.append(mac)
+                        if version < (3, 0):
+                            output.append(mac)
+                        else:
+                            output.append(mac.decode('utf-8'))
                 except IndexError:
                     pass
 
@@ -266,3 +281,11 @@ def is_ipv4(ipstring):
     """ check if the given string is an ipv4"""
     match = re.match(r"^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$", ipstring)
     return bool(match) and all(map(lambda n: 0 <= int(n) <= 255, match.groups()))
+
+def get_dev_brand():
+    """ Try to retrieve wireless network device brand """
+    grep = 'grep -i wireless'.split()
+    part1 = subprocess.Popen(['lspci'], stdout=subprocess.PIPE)
+    part2 = subprocess.Popen(grep, stdin=part1.stdout, stdout=subprocess.PIPE)
+    brand_line, err = part2.communicate()
+    return brand_line.split('Network controller:')[1].split('Wireless')[0]

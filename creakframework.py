@@ -168,6 +168,7 @@ class CreakFramework(Cmd, Printer):
         localip = strs.split('src')[-1].split()[0]
         mac_addr = utils.get_mac_by_dev(dev)
         gateway_addr = utils.get_mac_by_ip(gateway)
+        self._base_params['dev_brand'] = utils.get_dev_brand()
         self._base_params['dev'], self._base_params['gateway'] = dev, gateway
         self._base_params['localip'], self._base_params['gateway_addr'] = localip, gateway_addr
         if mac_addr:
@@ -296,7 +297,8 @@ class CreakFramework(Cmd, Printer):
             self._current.print_info()
         else:
             for field in sorted(self._fwk_info):
-                print('{}: {}'.format(field, self._fwk_info[field]))
+                self.print_output('{}{}:{} {}'.format(BOLD, field, N, self._fwk_info[field]))
+            print('')
 
     def do_clean(self, args):
         """ Clean up all params """
