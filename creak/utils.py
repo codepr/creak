@@ -28,12 +28,17 @@ import random
 import subprocess
 import struct
 import fcntl
+
+if sys.version_info < (3, 0):
+    import urllib2
+else:
+    import urllib.request
+
 try:
     import dpkt
-    import urllib2
     import ConfigParser
 except ImportError:
-    print("[!] Missing modules dpkt or urllib2 or ConfigParser")
+    print("[!] Missing modules dpkt or ConfigParser")
 from socket import socket, inet_aton, inet_ntoa, AF_INET, SOCK_DGRAM
 from scapy.all import ARP, Ether, srp
 import creak.config as config
@@ -206,6 +211,10 @@ def get_manufacturer(manufacturer):
     http://anonsvn.wireshark.org/wireshark/trunk/manuf
     """
     output, m_list = [], None
+    urllib = urllib.request
+
+    if sys.version_info < (3, 0):
+        urllib = urllib2
 
     if not os.path.exists("./manufacturers"):
         os.makedirs("./manufacturers")
@@ -214,7 +223,7 @@ def get_manufacturer(manufacturer):
         print("[+] No local cache data found for " + G + manufacturer + W
               + " found, fetching from web..")
         try:
-            urls = urllib2.urlopen(config.MANUFACTURER_URL)
+            urls = urllib.urlopen(config.MANUFACTURER_URL)
             m_list = open("./manufacturers/list.txt", "w+")
 
             for line in urls:
@@ -223,7 +232,11 @@ def get_manufacturer(manufacturer):
                     man = line.split()[1]
                     if re.search(manufacturer.lower(),
                                  man.lower()) and len(mac) < 17 and len(mac) > 1:
-                        output.append(mac)
+                        # python2.x ignore byte string b''
+                        if sys.version_info < (3, 0):
+                            output.append(mac)
+                        else:
+                            output.append(mac.decode('utf-8'))
                 except IndexError:
                     pass
         except:
@@ -242,7 +255,7 @@ def get_manufacturer(manufacturer):
                       + " device")
                 return macs
         except:
-            urls = urllib2.urlopen(config.MANUFACTURER_URL)
+            urls = urllib.urlopen(config.MANUFACTURER_URL)
             m_list = open("./manufacturers/list.txt", "a+")
 
             for line in urls:
@@ -251,7 +264,12 @@ def get_manufacturer(manufacturer):
                     man = line.split()[1]
                     if re.search(manufacturer.lower(),
                                  man.lower()) and len(mac) < 17 and len(mac) > 1:
-                        output.append(mac)
+                        # python2.x ignore byte string b''
+                        if sys.version_info < (3, 0):
+                            output.append(mac)
+                        else:
+                            output.append(mac.decode('utf-8'))
+
                 except IndexError:
                     pass
 
