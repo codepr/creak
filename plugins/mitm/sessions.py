@@ -85,7 +85,7 @@ class Plugin(BasePlugin):
             self.print_output('\n\rPoisoning interrupted')
             sock.close()
 
-    def restore(self, dev, gateway, target):
+    def _restore(self, dev, gateway, target):
         """ reset arp cache of the target and the router (AP) """
         source_mac = utils.get_mac_by_ip(gateway)
         sock = socket(PF_PACKET, SOCK_RAW)
@@ -174,11 +174,11 @@ class Plugin(BasePlugin):
                                 self.print_output(" [{:^5}] {} : {}".format(len(sessions), sess, sessions[sess]))
 
                 # self.print_output('Session scan interrupted\n\r')
-                # self.restore(kwargs['dev'], kwargs['gateway'], kwargs['target'])
+                # self._restore(kwargs['dev'], kwargs['gateway'], kwargs['target'])
                 # utils.set_ip_forward(0)
             except KeyboardInterrupt:
                 self.print_output('Session scan interrupted\n\r')
-                self.restore(kwargs['dev'], kwargs['gateway'], kwargs['target'])
+                self._restore(kwargs['dev'], kwargs['gateway'], kwargs['target'])
                 utils.set_ip_forward(0)
 
         sniff_thread = Thread(target=sniff_sessions, args=(packets, lambda: stop))

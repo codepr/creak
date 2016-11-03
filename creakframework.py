@@ -22,6 +22,7 @@ import os
 import re
 import sys
 import imp
+import threading
 import traceback
 import subprocess
 import shlex
@@ -46,7 +47,7 @@ class Printer(object):
     def print_exception(line=''):
         """ Display formatted exceptions """
         # if self._global_options['debug']:
-        # traceback.print_exc()
+        traceback.print_exc()
         line = ' '.join([x for x in [traceback.format_exc().strip().splitlines()[-1], line] if x])
         Printer.print_error(line)
 
@@ -141,23 +142,25 @@ class CreakFramework(Cmd, Printer):
         self._load_plugins()
         self.prompt = self._prompt_template % ('creak', 'base')
         print('')
+        print(' {}Creak v1.6.0{}'.format(BOLD, N))
+        print(' =======================================\n')
         print(' Author: Andrea Giacomo Baldan')
         print('         a.g.baldan@gmail.com')
         print('         https://github.com/codepr\n')
         print(' ---------------------------------------\n')
         print(' Successfully loaded %s plugins ' % len(self._loaded_plugins))
         print(' Categories:\n')
-        print(' ----------------------------------\n')
+        print(' ---------------------------------------\n')
         for category in sorted(self._loaded_category):
             if category != 'disabled':
-                print(' {}{}({}){}'.format(G, category, len(self._loaded_category[category]), N))
+                print(' + {}{}({}){}'.format(G, category, len(self._loaded_category[category]), N))
             else:
-                print(' {}{}({}){}'.format(R, category, len(self._loaded_category[category]), N))
+                print(' - {}{}({}){}'.format(R, category, len(self._loaded_category[category]), N))
             for plugin in self._loaded_category[category]:
                 if category != 'disabled':
                     print('     + {}{}{}'.format(G, plugin, N))
                 else:
-                    print('     + {}{}{}'.format(R, plugin, N))
+                    print('     - {}{}{}'.format(R, plugin, N))
             print('')
         strs = subprocess.check_output(shlex.split('ip r l'))
         gateway = strs.split('default via')[-1].split()[0]
@@ -171,7 +174,7 @@ class CreakFramework(Cmd, Printer):
             self._base_params['mac_addr'] = mac_addr
         print('')
         print(' Detected some informations\n')
-        print(' ----------------------------------\n')
+        print(' ---------------------------------------\n')
         for param in sorted(self._base_params):
             print(' {}{:.<12}{}{:.>15}{}{}'.format(BOLD, param, N, W, self._base_params[param], N))
         if os.getuid() != 0:
@@ -216,7 +219,7 @@ class CreakFramework(Cmd, Printer):
             # buffer = self.output
 
     def do_load(self, args):
-        '''Loads specified module'''
+        """ Loads specified module """
         self._params = {}
         if not args:
             return
@@ -239,7 +242,7 @@ class CreakFramework(Cmd, Printer):
         self.prompt = self._prompt_template % (self.prompt[6:11], plug_dispname.split('/')[-1])
 
     def do_set(self, args):
-        '''Sets module options'''
+        """ Sets module options """
         params = args.split()
         name = params[0].lower()
         if name in self._current.required_params:
@@ -250,11 +253,11 @@ class CreakFramework(Cmd, Printer):
             self.print_error('Invalid parameter.')
 
     def do_unset(self, args):
-        '''Unsets module params'''
+        """ Unsets module params """
         self.do_set('%s %s' % (args, 'None'))
 
     def do_run(self, args):
-        '''Runs the module'''
+        """ Runs the module  """
         try:
             is_valid = self._validate_params()
             if is_valid:
@@ -280,12 +283,15 @@ class CreakFramework(Cmd, Printer):
                 if required_params[field] is True:
                     required = 'required'
                 if field in  self._params:
-                    print(' {:<8} => {:>12} ({})'.format(field.upper(), self._params[field], required))
+                    print(' {:<10} => {:>12} ({})'.format(field.upper(), self._params[field], required))
                 else:
-                    print(' {:<8} => UNSET ({})'.format(field.upper(), required))
+                    print(' {:<10} => UNSET ({})'.format(field.upper(), required))
             print('')
 
     def do_showinfo(self, args):
+        print('')
+        self.print_output('{}Running threads:{} {}'.format(BOLD, N,
+                                                           len(threading.enumerate())))
         if self._current:
             self._current.print_info()
         else:

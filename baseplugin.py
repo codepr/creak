@@ -65,7 +65,6 @@ class BasePlugin(Printer):
         self.root = root
 
     def print_info(self):
-        print('')
         self.print_output('{}General infos:{}\n'.format(BOLD, N))
         for field in sorted(self.info):
             print('{}{}{}: {}'.format(BOLD, field, N, self.info[field]))
