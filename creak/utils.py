@@ -211,10 +211,12 @@ def get_manufacturer(manufacturer):
     http://anonsvn.wireshark.org/wireshark/trunk/manuf
     """
     output, m_list = [], None
-    urllib = urllib.request
+    url_lib = None
 
     if sys.version_info < (3, 0):
-        urllib = urllib2
+        url_lib = urllib2
+    else:
+        url_lib = urllib.request
 
     if not os.path.exists("./manufacturers"):
         os.makedirs("./manufacturers")
@@ -223,7 +225,7 @@ def get_manufacturer(manufacturer):
         print("[+] No local cache data found for " + G + manufacturer + W
               + " found, fetching from web..")
         try:
-            urls = urllib.urlopen(config.MANUFACTURER_URL)
+            urls = url_lib.urlopen(config.MANUFACTURER_URL)
             m_list = open("./manufacturers/list.txt", "w+")
 
             for line in urls:
@@ -255,7 +257,7 @@ def get_manufacturer(manufacturer):
                       + " device")
                 return macs
         except:
-            urls = urllib.urlopen(config.MANUFACTURER_URL)
+            urls = url_lib.urlopen(config.MANUFACTURER_URL)
             m_list = open("./manufacturers/list.txt", "a+")
 
             for line in urls:
