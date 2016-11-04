@@ -300,6 +300,9 @@ class CreakFramework(Cmd, Printer):
                 self.print_output('{}{}:{} {}'.format(BOLD, field, N, self._fwk_info[field]))
             print('')
 
+    def do_showplugins(self, args):
+        raise NotImplementedError('TODO')
+
     def do_clean(self, args):
         """ Clean up all params """
         self._params = {}
