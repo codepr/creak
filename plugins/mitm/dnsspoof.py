@@ -99,7 +99,7 @@ class Plugin(BasePlugin):
             self.print_output('\n\rPoisoning interrupted')
             sock.close()
 
-    def dns_spoof(self, kwargs):
+    def run(self, kwargs):
         """
         Redirect all incoming request for 'host' to 'redirection'
         """

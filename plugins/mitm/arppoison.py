@@ -39,7 +39,7 @@ class Plugin(BasePlugin):
         self._set_required_params(dev=True, target=True, gateway=True, src_mac=False, delay=False, stop=False)
         self._set_root(True)
 
-    def _poison(self, kwargs):
+    def run(self, kwargs):
         """
         poison arp cache of target and router, causing all traffic between them to
         pass inside our machine, MITM heart

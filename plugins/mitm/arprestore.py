@@ -39,7 +39,7 @@ class Plugin(BasePlugin):
         self._set_required_params(dev=True, target=True, gateway=True, src_mac=False, delay=False, stop=False)
         self._set_root(True)
 
-    def restore(self, kwargs):
+    def run(self, kwargs):
         """ reset arp cache of the kwargs['target'] and the router (AP) """
         source_mac = utils.get_mac_by_ip(kwargs['gateway'])
         sock = socket(PF_PACKET, SOCK_RAW)
