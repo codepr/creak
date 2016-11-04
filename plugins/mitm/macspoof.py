@@ -18,8 +18,11 @@
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
 # USA
 
+import os
 import re
 import sys
+import random
+import ConfigParser
 
 if sys.version_info < (3, 0):
     import urllib2
@@ -45,17 +48,19 @@ class Plugin(BasePlugin):
         self._set_required_params(dev=True, fake_addr=False, dev_brand=True)
         self._set_root(True)
 
-    def get_manufacturer(manufacturer):
+    def get_manufacturer(self, manufacturer):
         """
         get a list of MAC octets based on manufacturer fetching data from
         http://anonsvn.wireshark.org/wireshark/trunk/manuf
         """
         output, m_list = [], None
         version = sys.version_info
-        urllib = urllib.request
+        url_lib = None
 
         if version < (3, 0):
-            urllib = urllib2
+            url_lib = urllib2
+        else:
+            url_lib = urllib.request
 
         if not os.path.exists("./manufacturers"):
             os.makedirs("./manufacturers")
@@ -64,7 +69,7 @@ class Plugin(BasePlugin):
             print("[+] No local cache data found for " + G + manufacturer + W
                   + " found, fetching from web..")
             try:
-                urls = urllib.urlopen(config.MANUFACTURER_URL)
+                urls = url_lib.urlopen(config.MANUFACTURER_URL)
                 m_list = open("./manufacturers/list.txt", "w+")
 
                 for line in urls:
@@ -96,7 +101,7 @@ class Plugin(BasePlugin):
                           + " device")
                     return macs
             except:
-                urls = urllib.urlopen(config.MANUFACTURER_URL)
+                urls = url_lib.urlopen(config.MANUFACTURER_URL)
                 m_list = open("./manufacturers/list.txt", "a+")
 
                 for line in urls:
@@ -119,7 +124,7 @@ class Plugin(BasePlugin):
 
         return output
 
-    def fake_mac_address(prefix, mode=None):
+    def fake_mac_address(self, prefix, mode=None):
         """ generate a fake MAC address """
         if mode == 1:
             prefix = [0x00, 0x16, 0x3e]
@@ -128,7 +133,7 @@ class Plugin(BasePlugin):
             prefix += [(random.randint(0x00, 0xff)) for _ in xrange(6 - len(prefix))]
         return ':'.join('%02x' % x for x in prefix)
 
-    def change_mac(dev, new_mac):
+    def change_mac(self, dev, new_mac):
         """ try to change the MAC address associated to the device """
         if os.path.exists("/usr/bin/ip") or os.path.exists("/bin/ip"):
             # turn off device
@@ -163,11 +168,11 @@ class Plugin(BasePlugin):
         if choice == 'y' or choice == 'yes':
             mac_addr = utils.fake_mac_address([], 1)
             if dev_brand != 0 and not 'fake_addr' in kwargs:
-                print(dev_brand)
                 macs = self.get_manufacturer(dev_brand)
                 self.print_output(' Found {} MAC prefix for {} brand'.format(len(macs), dev_brand))
                 self.print_output(' Choosing one randomly')
-                mac_addr = utils.fake_mac_address(utils.mac_to_hex(random.choice(macs)))
+                if len(macs) > 0:
+                    mac_addr = utils.fake_mac_address(utils.mac_to_hex(random.choice(macs)))
             elif dev_brand != 0 and 'fake_addr' in kwargs:
                 if utils.parse_mac(kwargs['mac_addr']) != utils.parse_mac(kwargs['fake_addr']):
                     mac_addr = utils.fake_mac_address(utils.mac_to_hex(kwargs['fake_addr']))
