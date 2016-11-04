@@ -18,9 +18,12 @@
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
 # USA
 
-import socket
+import pcap
+import dpkt
+from socket import inet_ntoa
 from struct import unpack
 from baseplugin import BasePlugin
+import creak.utils as utils
 
 class Plugin(BasePlugin):
 
@@ -29,58 +32,81 @@ class Plugin(BasePlugin):
             author='codep',
             version='1.0',
             description='Poison the ARP cache of the target(s)')
-        self._set_required_params(dev=True, target=True, gateway=True, src_mac=False, delay=False, stop=False)
+        self._set_required_params(dev=True, pcap_filter=False)
         self._set_root(True)
 
     def run(self, kwargs):
-        #create an INET, STREAMing socket
-        s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
 
-        # receive a packet
-        while True:
-            packet = s.recvfrom(65565)
+        def decode_flag(tcp):
+            return {
+                'fin': (tcp.flags & dpkt.tcp.TH_FIN) != 0,
+                'syn': (tcp.flags & dpkt.tcp.TH_SYN) != 0,
+                'rst': (tcp.flags & dpkt.tcp.TH_RST) != 0,
+                'psh': (tcp.flags & dpkt.tcp.TH_PUSH) != 0,
+                'ack': (tcp.flags & dpkt.tcp.TH_ACK) != 0,
+                'urg': (tcp.flags & dpkt.tcp.TH_URG) != 0,
+                'ece': (tcp.flags & dpkt.tcp.TH_ECE) != 0,
+                'cwr': (tcp.flags & dpkt.tcp.TH_CWR) != 0
+            }
 
-            #packet string from tuple
-            packet = packet[0]
+        def print_packet(ipv, l1, l2):
+            print(' [{}] Header len: {} TTL: {} s_addr:'
+                  ' {:<15} {:<3} {:<15} {:<3} {:<6}'
+                  ' {:<3} {:<5}'.format(ipv, l1.hl, l1.ttl,
+                                        inet_ntoa(l1.src),
+                                        'd_addr:',
+                                        inet_ntoa(l1.dst),
+                                        's_port:',
+                                        str(l2.sport),
+                                        'd_port:',
+                                        str(l2.dport)))
 
-            #take first 20 characters for the ip header
-            ip_header = packet[0:20]
+        packets = pcap.pcap(name=kwargs['dev'], promisc=True)
+        if 'pcap_filter' in kwargs:
+            packets.setfilter(kwargs['pcap_filter'])
 
-            #now unpack them :)
-            iph = unpack('!BBHHHBBH4s4s' , ip_header)
+        # can be refactored and optimized
+        for _, pkt in packets:
+            l0 = dpkt.ethernet.Ethernet(pkt)
+            l1 = l0.data
+            l2 = l1.data
+            if l0.type == dpkt.ethernet.ETH_TYPE_ARP:
+                op_flag = 'request'
+                if l1.op == 2:
+                    op_flag = 'reply'
 
-            version_ihl = iph[0]
-            version = version_ihl >> 4
-            ihl = version_ihl & 0xF
+                print(' [ARP] op: {:<8} s_h_addr: {:<8} d_h_addr: {:<8}'
+                      ' s_p_addr: {:<8} d_p_addr: {:<8}'.format(op_flag,
+                                                               utils.binary_to_string(l1.sha),
+                                                               utils.binary_to_string(l1.tha),
+                                                               inet_ntoa(l1.spa),
+                                                               inet_ntoa(l1.tpa)))
+            elif l0.type == dpkt.ethernet.ETH_TYPE_IP:
+                ipv = 'IPv4'
+                # IPv4 - TCP packet
+                if l1.p == dpkt.ip.IP_PROTO_TCP:
+                    tcp_flags = decode_flag(l2)
+                    print_packet(ipv, l1, l2)
+                    flags = [x for x in tcp_flags if tcp_flags[x] is True]
+                    flags = ', '.join(flags)
+                    print('\tFlags: {}'.format(flags))
 
-            iph_length = ihl * 4
+                # IPv4 - UDP packet
+                elif l1.p == dpkt.ip.IP_PROTO_UDP:
+                    print_packet(ipv, l1, l2)
 
-            ttl = iph[5]
-            protocol = iph[6]
-            s_addr = socket.inet_ntoa(iph[8])
-            d_addr = socket.inet_ntoa(iph[9])
+            elif l0.type == dpkt.ethernet.ETH_TYPE_IP6:
+                ipv = 'IPv6'
+                # IPv6 - TCP packet
+                if l1.p == dpkt.ip.IP_PROTO_TCP:
+                    tcp_flags = decode_flag(l2)
+                    print_packet(ipv, l1, l2)
+                    flags = [x for x in tcp_flags if tcp_flags[x] is True]
+                    flags = ', '.join(flags)
+                    print('\tFlags: {}'.format(flags))
 
-            print('Version : ' + str(version) + ' IP Header Length : ' + str(ihl) + ' TTL : ' + str(ttl) + ' Protocol : ' + str(protocol) + ' Source Address : ' + str(s_addr) + ' Destination Address : ' + str(d_addr))
 
-            tcp_header = packet[iph_length:iph_length+20]
+                # IPv6 - UDP packet
+                elif l1.p == dpkt.ip.IP_PROTO_UDP:
+                    print_packet(ipv, l1, l2)
 
-            #now unpack them :)
-            tcph = unpack('!HHLLBBHHH' , tcp_header)
-
-            source_port = tcph[0]
-            dest_port = tcph[1]
-            sequence = tcph[2]
-            acknowledgement = tcph[3]
-            doff_reserved = tcph[4]
-            tcph_length = doff_reserved >> 4
-
-            print('Source Port : ' + str(source_port) + ' Dest Port : ' + str(dest_port) + ' Sequence Number : ' + str(sequence) + ' Acknowledgement : ' + str(acknowledgement) + ' TCP header length : ' + str(tcph_length))
-
-            h_size = iph_length + tcph_length * 4
-            data_size = len(packet) - h_size
-
-            #get data from the packet
-            data = packet[h_size:]
-
-            print('Data : ' + data)
-            print('')

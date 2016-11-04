@@ -127,7 +127,7 @@ class Plugin(BasePlugin):
             994: ' IRC SSL session'
         }
 
-        source = kwargs['src_mac'] if hasattr(kwargs, 'src_mac') else utils.get_default_gateway_linux()
+        source = kwargs['src_mac'] if 'src_mac' in kwargs else utils.get_default_gateway_linux()
         pcap_filter = self._build_pcap_filter("ip host ", kwargs['target'])
         if hasattr(kwargs, 'port'):
             pcap_filter += " and tcp port %s" % kwargs['port']

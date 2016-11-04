@@ -66,8 +66,8 @@ class Plugin(BasePlugin):
             os.makedirs("./manufacturers")
 
         if not os.path.isfile("./manufacturers/list.txt"):
-            print("[+] No local cache data found for " + G + manufacturer + W
-                  + " found, fetching from web..")
+            self.print_output("No local cache data found for " + G + manufacturer + W
+                              + " found, fetching from web..")
             try:
                 urls = url_lib.urlopen(config.MANUFACTURER_URL)
                 m_list = open("./manufacturers/list.txt", "w+")
@@ -86,21 +86,23 @@ class Plugin(BasePlugin):
                     except IndexError:
                         pass
             except:
-                print("[!] Error occured while trying to fetch data for manufacturer based mac address")
+                self.print_error("Error occured while trying to fetch data for manufacturer based mac address")
 
         else:
             macs = []
-            print("[+] Fetching data from local cache..")
+            self.print_output("Fetching data from local cache..")
             conf = ConfigParser.ConfigParser()
             conf.read("./manufacturers/list.txt")
 
             try:
                 macs = conf.get(manufacturer.lower(), 'MAC').split(',')
                 if len(macs) > 0:
-                    print("[+] Found mac octets from local cache for " + G + manufacturer + W
-                          + " device")
+                    self.print_output("Found mac octets from local cache for " + G + manufacturer + W
+                                      + " device")
                     return macs
             except:
+                self.print_output('No MAC prefixes found from local cache,'
+                                  'fetching from web')
                 urls = url_lib.urlopen(config.MANUFACTURER_URL)
                 m_list = open("./manufacturers/list.txt", "a+")
 
@@ -117,10 +119,11 @@ class Plugin(BasePlugin):
                     except IndexError:
                         pass
 
-        m_list.write("[" + manufacturer.lower() + "]\nMAC = ")
-        m_list.write(",".join(output))
-        m_list.write("\n")
-        m_list.close()
+        if len(output) > 0:
+            m_list.write("[" + manufacturer.lower() + "]\nMAC = ")
+            m_list.write(",".join(output))
+            m_list.write("\n")
+            m_list.close()
 
         return output
 
@@ -169,8 +172,8 @@ class Plugin(BasePlugin):
             mac_addr = utils.fake_mac_address([], 1)
             if dev_brand != 0 and not 'fake_addr' in kwargs:
                 macs = self.get_manufacturer(dev_brand)
-                self.print_output(' Found {} MAC prefix for {} brand'.format(len(macs), dev_brand))
-                self.print_output(' Choosing one randomly')
+                self.print_output('Found {} MAC prefix for {} brand'.format(len(macs), dev_brand))
+                self.print_output('Choosing one randomly')
                 if len(macs) > 0:
                     mac_addr = utils.fake_mac_address(utils.mac_to_hex(random.choice(macs)))
             elif dev_brand != 0 and 'fake_addr' in kwargs:
@@ -178,6 +181,7 @@ class Plugin(BasePlugin):
                     mac_addr = utils.fake_mac_address(utils.mac_to_hex(kwargs['fake_addr']))
 
             self.print_output('New MAC address {} is set'.format(mac_addr))
+            print('')
             # try:
             #     utils.change_mac(kwargs['dev'], mac_addr)
             # except OSError:

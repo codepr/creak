@@ -25,7 +25,6 @@ import imp
 import threading
 import traceback
 import subprocess
-import shlex
 from cmd import Cmd
 import creak.utils as utils
 
@@ -70,7 +69,7 @@ class CreakFramework(Cmd, Printer):
 
     def __init__(self, args):
         Cmd.__init__(self)
-        self.app_path = sys.path[0]
+        self._app_path = sys.path[0]
         self._loaded_plugins = {}
         self._loaded_category = {}
         self._prompt_template = W + '[%s::%s] > ' + N
@@ -86,10 +85,10 @@ class CreakFramework(Cmd, Printer):
         plug_loadpath = os.path.join(dirpath, filename)
         plug_file = open(plug_loadpath)
         try:
-            # import the module into memory
+            # import the plugin into memory
             imp.load_source(plug_loadname, plug_loadpath, plug_file)
             __import__(plug_loadname)
-            # add the module to the framework's loaded modules
+            # add the plugin to the framework's loaded plugins
             self._loaded_plugins[plug_dispname] = sys.modules[plug_loadname].Plugin(plug_dispname)
             return True
         except ImportError as ex:
@@ -100,14 +99,15 @@ class CreakFramework(Cmd, Printer):
             self.print_exception()
             self.print_error('Plugin \'%s\' disabled.' % (plug_dispname))
 
-        # remove the module from the framework's loaded modules
+        # remove the plugin from the framework's loaded plugins
         self._loaded_plugins.pop(plug_dispname, None)
         return False
 
     def _load_plugins(self):
         self._loaded_category = {}
-        # crawl the module directory and build the module tree
-        for path in [os.path.join(x, 'plugins') for x in (self.app_path, self.app_path)]:
+        # crawl the plugin directory and build the module tree
+        for path in [os.path.join(x, 'plugins') for x in (self._app_path,
+                                                          self._app_path)]:
             for dirpath, dirnames, filenames in os.walk(path):
                 # remove hidden files and directories
                 filenames = [f for f in filenames if not f[0] == '.']
@@ -130,7 +130,7 @@ class CreakFramework(Cmd, Printer):
             if self._current.required_params[param] is True and param not in self._params and param in self._base_params:
                 self._params[param] = self._base_params[param]
             elif self._current.required_params[param] is True and param not in self._params:
-                print('Value required for mandatory \'%s\' parameter.' % (param.upper()))
+                print('Value required for mandatory parameter \'%s\'.' % (param.upper()))
                 return False
         return True
 
@@ -162,13 +162,13 @@ class CreakFramework(Cmd, Printer):
                 else:
                     print('     - {}{}{}'.format(R, plugin, N))
             print('')
-        strs = subprocess.check_output(shlex.split('ip r l'))
+        strs = subprocess.check_output('ip r l'.split())
         gateway = strs.split('default via')[-1].split()[0]
         dev = strs.split('dev')[-1].split()[0]
         localip = strs.split('src')[-1].split()[0]
         mac_addr = utils.get_mac_by_dev(dev)
         gateway_addr = utils.get_mac_by_ip(gateway)
-        self._base_params['dev_brand'] = utils.get_dev_brand()
+        self._base_params['dev_brand'] = utils.get_dev_brand().lstrip()
         self._base_params['dev'], self._base_params['gateway'] = dev, gateway
         self._base_params['localip'], self._base_params['gateway_addr'] = localip, gateway_addr
         if mac_addr:
@@ -220,7 +220,7 @@ class CreakFramework(Cmd, Printer):
             # buffer = self.output
 
     def do_load(self, args):
-        """ Loads specified module """
+        """ Loads specified plugin """
         self._params = {}
         if not args:
             return
@@ -229,11 +229,11 @@ class CreakFramework(Cmd, Printer):
         # notify the user if none or multiple plugins are found
         if len(plugins) != 1:
             if not plugins:
-                self.print_error('Invalid module name.')
+                self.print_error('Invalid plugin name.')
             else:
                 self.print_output('Multiple plugins match \'%s\'.' % args)
             return
-        # load the module
+        # load the plugin
         plug_dispname = plugins[0]
         # loop to support reload logic
         plugin = self._loaded_plugins[plug_dispname]
@@ -243,22 +243,27 @@ class CreakFramework(Cmd, Printer):
         self.prompt = self._prompt_template % (self.prompt[6:11], plug_dispname.split('/')[-1])
 
     def do_set(self, args):
-        """ Sets module options """
+        """ Sets plugin parameters """
         params = args.split()
         name = params[0].lower()
-        if name in self._current.required_params:
-            value = ' '.join(params[1:])
-            self._params[name] = value
-            print('%s => %s' % (name.upper(), value))
-        else:
-            self.print_error('Invalid parameter.')
+        if self._current:
+            if name in self._current.required_params:
+                value = ' '.join(params[1:])
+                self._params[name] = value
+                print('%s => %s' % (name.upper(), value))
+            else:
+                self.print_error('Invalid parameter.')
 
     def do_unset(self, args):
-        """ Unsets module params """
-        self.do_set('%s %s' % (args, 'None'))
+        """ Unsets plugin parameter """
+        if args in self._params:
+            self._params.pop(args)
 
     def do_run(self, args):
-        """ Runs the module  """
+        """ Validates set parameters, and fallback with auto-detected ones
+        those which can be used in place of each other, and finally runs the
+        plugin
+        """
         try:
             is_valid = self._validate_params()
             if is_valid:
@@ -273,6 +278,9 @@ class CreakFramework(Cmd, Printer):
         except Exception:
             self.print_exception()
 
+    def do_plugrun(self, args):
+        raise NotImplementedError('TODO')
+
     def do_recap(self, args):
         """ Display all params set for the current plugin """
         if self._current:
@@ -284,12 +292,16 @@ class CreakFramework(Cmd, Printer):
                 if required_params[field] is True:
                     required = 'required'
                 if field in  self._params:
-                    print(' {:<10} => {:>12} ({})'.format(field.upper(), self._params[field], required))
+                    print(' {:<13} => {:>10} ({})'.format(field.upper(), self._params[field], required))
                 else:
-                    print(' {:<10} => UNSET ({})'.format(field.upper(), required))
+                    print(' {:<13} => {:>10} ({})'.format(field.upper(),
+                                                          'UNSET', required))
             print('')
 
     def do_showinfo(self, args):
+        """ Display framework informations or, if in a plugin context, display
+        plugin informations, like author, description and parameters accepted
+        """
         print('')
         self.print_output('{}Running threads:{} {}'.format(BOLD, N,
                                                            len(threading.enumerate())))
@@ -301,10 +313,11 @@ class CreakFramework(Cmd, Printer):
             print('')
 
     def do_showplugins(self, args):
+        """ List all loaded plugins and informations of them """
         raise NotImplementedError('TODO')
 
     def do_clean(self, args):
-        """ Clean up all params """
+        """ Clean up all set params, if in a plugin context remove the context """
         self._params = {}
         self._current = None
 

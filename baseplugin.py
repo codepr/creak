@@ -43,13 +43,13 @@ class Parameters(dict):
         super(Parameters, self).__delitem__(key)
 
     def set_values(self, **kwargs):
+        """ Sets dynamic size parameters using a kwargs """
         for arg in kwargs:
             self.__setitem__(arg, kwargs[arg])
 
 class BasePlugin(Printer):
 
     def __init__(self, args):
-        self.app_path = sys.path[0]
         self._plugin_name = args
         self.root = False
         self.required_params = Parameters()
