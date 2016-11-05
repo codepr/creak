@@ -80,7 +80,7 @@ class Plugin(BasePlugin):
         sock.bind((dev, dpkt.ethernet.ETH_TYPE_ARP))
         try:
             while not stop():
-                if config.VERBOSE is True:
+                if config.VERBOSE:
                     self.print_output('%s <-- %s -- %s -- %s --> %s',
                                       gateway, target, dev, gateway, target)
                     if not isinstance(target, list):

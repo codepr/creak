@@ -72,7 +72,7 @@ class Plugin(BasePlugin):
         sock.bind((dev, dpkt.ethernet.ETH_TYPE_ARP))
         try:
             while not stop():
-                if config.VERBOSE is True:
+                if config.VERBOSE:
                     self.print_output('%s <-- %s -- %s -- %s --> %s',
                                       gateway, target, dev, gateway, target)
                     if not isinstance(target, list):
@@ -141,7 +141,7 @@ class Plugin(BasePlugin):
             print('[+] Sending RST packets to ' + R
                   + (','.join(kwargs['target']) if isinstance(kwargs['target'], list) else kwargs['target']) + W)
 
-        if config.DOTTED is True:
+        if config.DOTTED:
             print('[+] Every dot symbolize a sent packet')
 
         def inject_rst(packets, stop):
@@ -188,7 +188,7 @@ class Plugin(BasePlugin):
 
                             sock.send(str(eth_layer))
 
-                            if config.DOTTED is True:
+                            if config.DOTTED:
                                 utils.print_in_line('.')
                             else:
                                 utils.print_counter(counter)
@@ -201,7 +201,7 @@ class Plugin(BasePlugin):
 
                             sock.send(str(eth_layer))
 
-                            if config.DOTTED is True:
+                            if config.DOTTED:
                                 utils.print_in_line('.')
                             else:
                                 utils.print_counter(counter)

@@ -66,7 +66,7 @@ class Plugin(BasePlugin):
         sock.bind((dev, dpkt.ethernet.ETH_TYPE_ARP))
         try:
             while not stop():
-                if config.VERBOSE is True:
+                if config.VERBOSE:
                     self.print_output('%s <-- %s -- %s -- %s --> %s',
                                       gateway, target, dev, gateway, target)
                     if not isinstance(target, list):
@@ -170,7 +170,7 @@ class Plugin(BasePlugin):
                             elif tcp.dport in notorious_services:
                                 sessions[sess] = notorious_services[tcp.dport]
 
-                            if check is True:
+                            if check:
                                 self.print_output(" [{:^5}] {} : {}".format(len(sessions), sess, sessions[sess]))
 
                 # self.print_output('Session scan interrupted\n\r')

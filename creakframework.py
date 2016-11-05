@@ -127,9 +127,9 @@ class CreakFramework(Cmd, Printer):
 
     def _validate_params(self):
         for param in self._current.required_params:
-            if self._current.required_params[param] is True and param not in self._params and param in self._base_params:
+            if self._current.required_params[param] and param not in self._params and param in self._base_params:
                 self._params[param] = self._base_params[param]
-            elif self._current.required_params[param] is True and param not in self._params:
+            elif self._current.required_params[param] and param not in self._params:
                 print('Value required for mandatory parameter \'%s\'.' % (param.upper()))
                 return False
         return True
@@ -275,8 +275,7 @@ class CreakFramework(Cmd, Printer):
                 params['dev_brand'] = self._base_params['dev_brand']
             macspoof.run(params)
         else:
-            macspoof.run({'dev': self._base_params['dev'], 'dev_brand':
-                          self._base_params['dev_brand']})
+            macspoof.run({'dev': self._base_params['dev']})
 
     def do_run(self, args):
         """
@@ -308,7 +307,7 @@ class CreakFramework(Cmd, Printer):
             self.print_output('{}Recap:{}\n'.format(BOLD, N))
             for field in sorted(required_params):
                 required = 'optional'
-                if required_params[field] is True:
+                if required_params[field]:
                     required = 'required'
                 if field in  self._params:
                     print(' {:<13} => {:>10} ({})'.format(field.upper(), self._params[field], required))

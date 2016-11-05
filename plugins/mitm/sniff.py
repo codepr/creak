@@ -49,17 +49,17 @@ class Plugin(BasePlugin):
                 'cwr': (tcp.flags & dpkt.tcp.TH_CWR) != 0
             }
 
-        def print_packet(ipv, l1, l2):
+        def print_packet(ipv, L1, L2):
             print(' [{}] Header len: {} TTL: {} s_addr:'
                   ' {:<15} {:<3} {:<15} {:<3} {:<6}'
-                  ' {:<3} {:<5}'.format(ipv, l1.hl, l1.ttl,
-                                        inet_ntoa(l1.src),
+                  ' {:<3} {:<5}'.format(ipv, L1.hl, L1.ttl,
+                                        inet_ntoa(L1.src),
                                         'd_addr:',
-                                        inet_ntoa(l1.dst),
+                                        inet_ntoa(L1.dst),
                                         's_port:',
-                                        str(l2.sport),
+                                        str(L2.sport),
                                         'd_port:',
-                                        str(l2.dport)))
+                                        str(L2.dport)))
 
         packets = pcap.pcap(name=kwargs['dev'], promisc=True)
         if 'pcap_filter' in kwargs:
@@ -67,46 +67,46 @@ class Plugin(BasePlugin):
 
         # can be refactored and optimized
         for _, pkt in packets:
-            l0 = dpkt.ethernet.Ethernet(pkt)
-            l1 = l0.data
-            l2 = l1.data
-            if l0.type == dpkt.ethernet.ETH_TYPE_ARP:
+            L0 = dpkt.ethernet.Ethernet(pkt)
+            L1 = L0.data
+            L2 = L1.data
+            if L0.type == dpkt.ethernet.ETH_TYPE_ARP:
                 op_flag = 'request'
-                if l1.op == 2:
+                if L1.op == 2:
                     op_flag = 'reply'
 
                 print(' [ARP] op: {:<8} s_h_addr: {:<8} d_h_addr: {:<8}'
                       ' s_p_addr: {:<8} d_p_addr: {:<8}'.format(op_flag,
-                                                               utils.binary_to_string(l1.sha),
-                                                               utils.binary_to_string(l1.tha),
-                                                               inet_ntoa(l1.spa),
-                                                               inet_ntoa(l1.tpa)))
-            elif l0.type == dpkt.ethernet.ETH_TYPE_IP:
+                                                               utils.binary_to_string(L1.sha),
+                                                               utils.binary_to_string(L1.tha),
+                                                               inet_ntoa(L1.spa),
+                                                               inet_ntoa(L1.tpa)))
+            elif L0.type == dpkt.ethernet.ETH_TYPE_IP:
                 ipv = 'IPv4'
                 # IPv4 - TCP packet
-                if l1.p == dpkt.ip.IP_PROTO_TCP:
-                    tcp_flags = decode_flag(l2)
-                    print_packet(ipv, l1, l2)
-                    flags = [x for x in tcp_flags if tcp_flags[x] is True]
+                if L1.p == dpkt.ip.IP_PROTO_TCP:
+                    tcp_flags = decode_flag(L2)
+                    print_packet(ipv, L1, L2)
+                    flags = [x for x in tcp_flags if tcp_flags[x]]
                     flags = ', '.join(flags)
                     print('\tFlags: {}'.format(flags))
 
                 # IPv4 - UDP packet
-                elif l1.p == dpkt.ip.IP_PROTO_UDP:
-                    print_packet(ipv, l1, l2)
+                elif L1.p == dpkt.ip.IP_PROTO_UDP:
+                    print_packet(ipv, L1, L2)
 
-            elif l0.type == dpkt.ethernet.ETH_TYPE_IP6:
+            elif L0.type == dpkt.ethernet.ETH_TYPE_IP6:
                 ipv = 'IPv6'
                 # IPv6 - TCP packet
-                if l1.p == dpkt.ip.IP_PROTO_TCP:
-                    tcp_flags = decode_flag(l2)
-                    print_packet(ipv, l1, l2)
-                    flags = [x for x in tcp_flags if tcp_flags[x] is True]
+                if L1.p == dpkt.ip.IP_PROTO_TCP:
+                    tcp_flags = decode_flag(L2)
+                    print_packet(ipv, L1, L2)
+                    flags = [x for x in tcp_flags if tcp_flags[x]]
                     flags = ', '.join(flags)
                     print('\tFlags: {}'.format(flags))
 
 
                 # IPv6 - UDP packet
-                elif l1.p == dpkt.ip.IP_PROTO_UDP:
-                    print_packet(ipv, l1, l2)
+                elif L1.p == dpkt.ip.IP_PROTO_UDP:
+                    print_packet(ipv, L1, L2)
 
