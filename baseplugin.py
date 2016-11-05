@@ -20,7 +20,7 @@
 
 import sys
 import re
-from creakframework import Printer
+from creak.pluginmanager import Printer
 
 N = '\033[m' # native
 R = '\033[31m' # red
