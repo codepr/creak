@@ -65,6 +65,10 @@ class BasePlugin(Printer):
         self.root = root
 
     def print_info(self):
+        """
+        Dispaly formatted informations of the plugin, like author, description
+        and accepted parameters, either optional or mandatory
+        """
         self.print_output('{}General infos:{}\n'.format(BOLD, N))
         for field in sorted(self.info):
             print('{}{}{}: {}'.format(BOLD, field, N, self.info[field]))

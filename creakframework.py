@@ -196,7 +196,7 @@ class CreakFramework(Cmd, Printer):
         return Cmd.parseline(self, line)
 
     def do_shell(self, line):
-        "Run a shell command"
+        """ Run a shell command """
         output = os.popen(line).read()
         if line == 'ls':
             files = output.split('\n')
@@ -259,10 +259,29 @@ class CreakFramework(Cmd, Printer):
         if args in self._params:
             self._params.pop(args)
 
+    def do_spoofmac(self, args):
+        """
+        Change the MAC address fetching a prefix from a remote list, or by
+        generating a total random one
+        """
+        macspoof = self._loaded_plugins['mitm/macspoof']
+        if args:
+            params = {}
+            for arg in args.split():
+                params[arg.split('=')[0]] = arg.split('=')[1]
+            if 'dev' not in params:
+                params['dev'] = self._base_params['dev']
+            if 'dev_brand' not in params:
+                params['dev_brand'] = self._base_params['dev_brand']
+            macspoof.run(params)
+        else:
+            macspoof.run({'dev': self._base_params['dev'], 'dev_brand':
+                          self._base_params['dev_brand']})
+
     def do_run(self, args):
-        """ Validates set parameters, and fallback with auto-detected ones
-        those which can be used in place of each other, and finally runs the
-        plugin
+        """
+        Validates set parameters, and fallback with auto-detected ones those
+        which can be used in place of each other, and finally runs the plugin
         """
         try:
             is_valid = self._validate_params()
