@@ -101,9 +101,12 @@ class CreakShell(PluginManager, Cmd):
         # load the plugin
         plug_dispname = plugins[0]
         plugin = self._loaded_plugins[plug_dispname]
+        # init informations and required parameters
         plugin.init_plugin()
+        # set the context for the prompt shell
         self._current = plugin
-        self.prompt = self._prompt_template % (self.prompt[6:11], plug_dispname.split('/')[-1])
+        self.prompt = self._prompt_template % (self.prompt[6:11],
+                                               plug_dispname.split('/')[-1])
 
     def do_set(self, args):
         """
@@ -232,6 +235,12 @@ class CreakShell(PluginManager, Cmd):
                 else:
                     print('     - {}{}{}'.format(R, plugin, N))
             print('')
+
+    def do_previous(self, args):
+        raise NotImplementedError('TODO')
+
+    def do_next(self, args):
+        raise NotImplementedError('TODO')
 
     def do_clean(self, args):
         """ Clean up all set params, if in a plugin context remove the context """
