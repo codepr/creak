@@ -18,6 +18,7 @@
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
 # USA
 
+import re
 import os
 import sys
 import threading
@@ -54,6 +55,9 @@ class CreakShell(PluginManager, Cmd):
     def parseline(self, line):
         if '|' in line:
             return 'pipe', line.split('|'), line
+        m = re.search(r'\$\((\w+)\)', line)
+        if m:
+            print(m.group(1))
         return Cmd.parseline(self, line)
 
     def do_shell(self, line):
