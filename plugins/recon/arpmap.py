@@ -21,14 +21,8 @@
 from socket import socket, inet_aton, inet_ntoa, PF_PACKET, SOCK_RAW
 from threading import Thread, Timer
 import sys
-try:
-    import pcap
-except ImportError:
-    raise
-try:
-    import dpkt
-except ImportError:
-    raise
+import pcap
+import dpkt
 from baseplugin import BasePlugin
 import creak.utils as utils
 

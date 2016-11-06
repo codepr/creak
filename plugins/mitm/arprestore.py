@@ -20,11 +20,7 @@
 
 import time
 from socket import socket, PF_PACKET, SOCK_RAW
-try:
-    import dpkt
-except ImportError:
-    print("[!] Missing module dpkt, try setting SCAPY to True in config.py "
-          "or install missing modules")
+import dpkt
 from baseplugin import BasePlugin
 import creak.utils as utils
 import creak.config as config

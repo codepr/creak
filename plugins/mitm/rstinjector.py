@@ -21,12 +21,8 @@
 import time
 from threading import Thread
 from socket import socket, PF_PACKET, SOCK_RAW
-try:
-    import pcap
-    import dpkt
-except ImportError:
-    print("[!] Missing modules pcap or dpkt, try setting SCAPY to True in config.py "
-          "or install missing modules")
+import pcap
+import dpkt
 from baseplugin import BasePlugin
 import creak.utils as utils
 import creak.config as config

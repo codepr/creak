@@ -21,21 +21,9 @@
 import time
 from threading import Thread
 from socket import socket, gethostbyname, inet_ntoa, PF_PACKET, SOCK_RAW
-try:
-    import dpkt
-except ImportError:
-    print("[!] Missing modules dpkt, try setting SCAPY to True in config.py "
-          "or install missing modules")
-try:
-    import dpkt
-except ImportError:
-    print("[!] Missing modules pcap, try setting SCAPY to True in config.py "
-          "or install missing modules")
-try:
-    import dnet
-except ImportError:
-    raise
-    # print("[!] Missing module dnet")
+import dpkt
+import dpkt
+import dnet
 from baseplugin import BasePlugin
 import creak.utils as utils
 import creak.config as config
