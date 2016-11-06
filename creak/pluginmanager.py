@@ -70,7 +70,6 @@ class PluginManager(Printer):
         self._app_path = path
         self._loaded_plugins = {}
         self._loaded_category = {}
-        self._prompt_template = W + '[%s::%s] > ' + N
         self._params = {}
         self._current = None
         self._fwk_info = {'author': 'codep', 'version': '1.0'}
@@ -116,7 +115,6 @@ class PluginManager(Printer):
                         plug_category = 'disabled'
                         if is_loaded:
                             plug_category = re.search('/plugins/([^/]*)', dirpath).group(1)
-
                         # store the resulting category statistics
                         if not plug_category in self._loaded_category:
                             self._loaded_category[plug_category] = [filename]
@@ -138,7 +136,6 @@ class PluginManager(Printer):
         trying also to retrieve some basic info from the system
         """
         self._load_plugins()
-        self.prompt = self._prompt_template % ('creak', 'base')
         print('')
         print(' {}Creak v1.6.0{}'.format(BOLD, N))
         print(' =======================================\n')

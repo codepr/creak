@@ -102,7 +102,9 @@ class Plugin(BasePlugin):
                     return macs
             except:
                 self.print_output('No MAC prefixes found from local cache,'
-                                  'fetching from web')
+                                  ' for {}{}{} fetching from web'.format(G,
+                                                                         manufacturer,
+                                                                         W))
                 urls = url_lib.urlopen(config.MANUFACTURER_URL)
                 m_list = open("./manufacturers/list.txt", "a+")
 

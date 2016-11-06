@@ -40,11 +40,15 @@ class CreakShell(PluginManager, Cmd):
     def __init__(self):
         super(CreakShell, self).__init__(sys.path[0])
         Cmd.__init__(self)
+        self._prompt_template = W + '[%s::%s] > ' + N
+        self.prompt = self._prompt_template % ('creak', 'base')
 
     def emptyline(self):
+        # disable binding on return for the last command prompted
         pass
 
     def default(self, line):
+        # default to shell commands, gives access to underlying shell
         self.do_shell(line)
 
     def parseline(self, line):
@@ -92,15 +96,18 @@ class CreakShell(PluginManager, Cmd):
             return
         # load the plugin
         plug_dispname = plugins[0]
-        # loop to support reload logic
         plugin = self._loaded_plugins[plug_dispname]
         plugin.init_plugin()
         self._current = plugin
-        # self.required_params = plugin.required_params
         self.prompt = self._prompt_template % (self.prompt[6:11], plug_dispname.split('/')[-1])
 
     def do_set(self, args):
-        """ Sets plugin parameters """
+        """
+        Sets plugin parameters, accept one or more parameters in two different
+        forms:
+        - set param1 value1 param2 value2 etc..
+        - set param1=value1 param2=value2 etc..
+        """
         if args:
             params = args.split()
             if any('=' in param for param in params):
@@ -108,6 +115,7 @@ class CreakShell(PluginManager, Cmd):
                 params = [param for sublist in list_of_paramlist for param in
                           sublist]
             names, values = params[0::2], params[1::2]
+            # TODO: must handle debug parameter
             if self._current:
                 for (name, value) in zip(names, values):
                     if name in self._current.required_params:
@@ -117,7 +125,7 @@ class CreakShell(PluginManager, Cmd):
                         self.print_error('Invalid parameter.')
 
     def do_unset(self, args):
-        """ Unsets plugin parameter """
+        """ Unsets a plugin parameter """
         if args in self._params:
             self._params.pop(args)
 
@@ -159,7 +167,19 @@ class CreakShell(PluginManager, Cmd):
             self.print_exception()
 
     def do_plugrun(self, args):
-        raise NotImplementedError('TODO')
+        """
+        Load and run a plugin directly by accepting parameters, equals to
+        load <plugin>
+        set [params values]
+        run
+        """
+        params = args.split()
+        self.do_load(params[0])
+        params = params[1:]
+        pairs = [' '.join(x) for x in zip(params[0::2], params[1::2])]
+        for pair in pairs:
+            self.do_set(pair)
+        self.do_run(self._params)
 
     def do_recap(self, args):
         """ Display all params set for the current plugin """
@@ -179,7 +199,8 @@ class CreakShell(PluginManager, Cmd):
             print('')
 
     def do_showinfo(self, args):
-        """ Display framework informations or, if in a plugin context, display
+        """
+        Display framework informations or, if in a plugin context, display
         plugin informations, like author, description and parameters accepted
         """
         print('')
@@ -194,7 +215,19 @@ class CreakShell(PluginManager, Cmd):
 
     def do_showplugins(self, args):
         """ List all loaded plugins and informations of them """
-        raise NotImplementedError('TODO')
+        print('')
+        self.print_output('Loaded plugins:\n')
+        for category in sorted(self._loaded_category):
+            if category != 'disabled':
+                print(' + {}{}({}){}'.format(G, category, len(self._loaded_category[category]), N))
+            else:
+                print(' - {}{}({}){}'.format(R, category, len(self._loaded_category[category]), N))
+            for plugin in self._loaded_category[category]:
+                if category != 'disabled':
+                    print('     + {}{}{}'.format(G, plugin, N))
+                else:
+                    print('     - {}{}{}'.format(R, plugin, N))
+            print('')
 
     def do_clean(self, args):
         """ Clean up all set params, if in a plugin context remove the context """
@@ -202,7 +235,7 @@ class CreakShell(PluginManager, Cmd):
         self._current = None
 
     def do_quit(self, args):
-        """ Exit the application """
+        """ Quit the application """
         print('Quitting..')
         raise SystemExit
 
