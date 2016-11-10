@@ -53,8 +53,8 @@ class CreakShell(PluginManager, Cmd):
         self.do_shell(line)
 
     def parseline(self, line):
-        if '|' in line:
-            return 'pipe', line.split('|'), line
+        # if '|' in line:
+        #     return 'pipe', line.split('|'), line
         m = re.search(r'\$\((\w+)\)', line)
         if m:
             print(m.group(1))
@@ -73,16 +73,16 @@ class CreakShell(PluginManager, Cmd):
         else:
             print('\n%s' % output)
 
-    def do_pipe(self, args):
-        buffer = None
-        for arg in args:
-            s = arg
-            if buffer:
-                # This command just adds the output of a previous command as the last argument
-                s += ' ' + buffer
-
-            # self.onecmd(s)
-            # buffer = self.output
+    # def do_pipe(self, args):
+    #     buffer = None
+    #     for arg in args:
+    #         s = arg
+    #         if buffer:
+    #             # This command just adds the output of a previous command as the last argument
+    #             s += ' ' + buffer
+    #
+    #         # self.onecmd(s)
+    #         # buffer = self.output
 
     def do_load(self, args):
         """ Loads specified plugin """
@@ -101,6 +101,8 @@ class CreakShell(PluginManager, Cmd):
         # load the plugin
         plug_dispname = plugins[0]
         plugin = self._loaded_plugins[plug_dispname]
+        # add to history
+        self._history.append(plug_dispname.split('/')[1])
         # init informations and required parameters
         plugin.init_plugin()
         # set the context for the prompt shell
@@ -108,10 +110,18 @@ class CreakShell(PluginManager, Cmd):
         self.prompt = self._prompt_template % (self.prompt[6:11],
                                                plug_dispname.split('/')[-1])
 
+    def do_unload(self, args):
+        """ Unload current plugin if in a non-base context """
+        if self._current is not None:
+            self._params = {}
+            self._current = None
+            self.prompt = self._prompt_template % ('creak', 'base')
+
     def do_set(self, args):
         """
         Sets plugin parameters, accept one or more parameters in two different
         forms:
+
         - set param1 value1 param2 value2 etc..
         - set param1=value1 param2=value2 etc..
         """
@@ -176,9 +186,8 @@ class CreakShell(PluginManager, Cmd):
     def do_plugrun(self, args):
         """
         Load and run a plugin directly by accepting parameters, equals to
-        load <plugin>
-        set [params values]
-        run
+
+        load [plugin] > set [params values] > run
         """
         params = args.split()
         self.do_load(params[0])
@@ -211,14 +220,25 @@ class CreakShell(PluginManager, Cmd):
         plugin informations, like author, description and parameters accepted
         """
         print('')
-        self.print_output('{}Running threads:{} {}'.format(BOLD, N,
-                                                           len(threading.enumerate())))
+        self.print_output('{}{:.<15}{}{:.>15}{}{}'.format(BOLD,
+                                                          'Running threads',
+                                                          N, W,
+                                                          len(threading.enumerate()),
+                                                          N))
         if self._current:
             self._current.print_info()
         else:
             for field in sorted(self._fwk_info):
-                self.print_output('{}{}:{} {}'.format(BOLD, field, N, self._fwk_info[field]))
-            print('')
+                self.print_output('{}{:.<15}{}{:.>15}{}{}'.format(BOLD, field,
+                                                                  N, W,
+                                                                  self._fwk_info[field],
+                                                                  N))
+            for param in sorted(self._base_params):
+                self.print_output('{}{:.<15}{}{:.>15}{}{}'.format(BOLD, param,
+                                                                  N, W,
+                                                                  self._base_params[param],
+                                                                  N))
+        print('')
 
     def do_showplugins(self, args):
         """ List all loaded plugins and informations of them """
@@ -236,11 +256,14 @@ class CreakShell(PluginManager, Cmd):
                     print('     - {}{}{}'.format(R, plugin, N))
             print('')
 
-    def do_previous(self, args):
-        raise NotImplementedError('TODO')
+    def do_showerrors(self, args):
+        """ Lists errors occured during operations of loading """
+        pass
 
-    def do_next(self, args):
-        raise NotImplementedError('TODO')
+
+    def do_previous(self, args):
+        if len(self._history) > 1:
+            self.do_load(self._history[-2])
 
     def do_clean(self, args):
         """ Clean up all set params, if in a plugin context remove the context """
@@ -253,7 +276,8 @@ class CreakShell(PluginManager, Cmd):
         raise SystemExit
 
     do_use = do_load
-    do_params = do_recap
+    do_showparams = do_recap
+    do_prev = do_previous
     do_exit = do_quit
     do_q = do_quit
 

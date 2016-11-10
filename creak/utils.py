@@ -44,9 +44,14 @@ from scapy.all import ARP, Ether, srp
 import creak.config as config
 
 # console colors
-W = '\033[0m'  # white (normal)
+N = '\033[m' # native
 R = '\033[31m' # red
 G = '\033[32m' # green
+O = '\033[33m' # orange
+B = '\033[34m' # blue
+C = '\033[36m' # cyan
+W = '\033[97m' # white
+BOLD = '\033[1m'
 
 def print_counter(counter):
     """ print counter in place """
@@ -220,7 +225,7 @@ def get_manufacturer(manufacturer):
         os.makedirs("./manufacturers")
 
     if not os.path.isfile("./manufacturers/list.txt"):
-        print("[+] No local cache data found for " + G + manufacturer + W
+        print("[+] No local cache data found for " + G + manufacturer + N
               + " found, fetching from web..")
         try:
             urls = urllib.urlopen(config.MANUFACTURER_URL)
@@ -250,7 +255,7 @@ def get_manufacturer(manufacturer):
         try:
             macs = conf.get(manufacturer.lower(), 'MAC').split(',')
             if len(macs) > 0:
-                print("[+] Found mac octets from local cache for " + G + manufacturer + W
+                print("[+] Found mac octets from local cache for " + G + manufacturer + N
                       + " device")
                 return macs
         except:

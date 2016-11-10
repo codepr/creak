@@ -22,7 +22,6 @@ import time
 from threading import Thread
 from socket import socket, gethostbyname, inet_ntoa, PF_PACKET, SOCK_RAW
 import dpkt
-import dpkt
 import dnet
 from baseplugin import BasePlugin
 import creak.utils as utils
@@ -96,9 +95,9 @@ class Plugin(BasePlugin):
         redirection = gethostbyname(kwargs['redirection'])
         sock = dnet.ip()
         source = kwargs['src_mac'] if hasattr(kwargs, 'src_mac') else utils.get_default_gateway_linux()
-        print('[+] Start poisoning on ' + G + self.dev + W + ' between ' + G + self.gateway + W
-              + ' and ' + R
-              + (','.join(kwargs['target']) if isinstance(kwargs['target'], list) else kwargs['target']) + W +'\n')
+        self.print_output('Start poisoning on ' + G + self.dev + W + ' between ' + G + self.gateway + W
+                          + ' and ' + R
+                          + (','.join(kwargs['target']) if isinstance(kwargs['target'], list) else kwargs['target']) + W +'\n')
         # need to create a daemon that continually poison our target
         poison_thread = Thread(target=self.poison,
                                args=(kwargs['dev'], source, kwargs['gateway'], kwargs['target'], 2, lambda: stop))
@@ -108,8 +107,8 @@ class Plugin(BasePlugin):
         packets = pcap.pcap(self.dev)
         packets.setfilter(pcap_filter)
 
-        print('[+] Redirecting ' + G + kwargs['host'] + W + ' to ' + G + redirection + W + ' for ' + R
-              + (','.join(kwargs['target']) if isinstance(kwargs['target'], list) else kwargs['target']) + W)
+        self.print_output('Redirecting ' + G + kwargs['host'] + W + ' to ' + G + redirection + W + ' for ' + R
+                          + (','.join(kwargs['target']) if isinstance(kwargs['target'], list) else kwargs['target']) + W)
 
         try:
             for _, pkt in packets:
@@ -159,6 +158,6 @@ class Plugin(BasePlugin):
                 sock.send(buf)
 
         except KeyboardInterrupt:
-            print('[+] DNS spoofing interrupted\n\r')
+            self.print_output('DNS spoofing interrupted\n\r')
             self.restore(2)
             utils.set_ip_forward(0)

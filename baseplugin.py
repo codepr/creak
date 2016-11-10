@@ -71,14 +71,14 @@ class BasePlugin(Printer):
         """
         self.print_output('{}General infos:{}\n'.format(BOLD, N))
         for field in sorted(self.info):
-            print('{}{}{}: {}'.format(BOLD, field, N, self.info[field]))
+            print(' {}{}{}: {}'.format(BOLD, field, N, self.info[field]))
         print('')
         self.print_output('{}Parameters{}\n'.format(BOLD, N))
         for param in sorted(self.required_params):
             required = 'optional'
             if self.required_params[param] is True:
                 required = 'required'
-            print('{}{:.<12}{}{:.>15}{}{}'.format(BOLD, param, N, W, required, N))
+            print(' {}{:.<12}{}{:.>15}{}{}'.format(BOLD, param, N, W, required, N))
         print('')
 
     def init_plugin(self):

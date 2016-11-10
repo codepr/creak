@@ -22,7 +22,6 @@ import os
 import re
 import sys
 import imp
-import threading
 import traceback
 import subprocess
 import creak.utils as utils
@@ -44,7 +43,6 @@ class Printer(object):
     @staticmethod
     def print_exception(line=''):
         """ Display formatted exceptions """
-        # if self._global_options['debug']:
         traceback.print_exc()
         line = ' '.join([x for x in [traceback.format_exc().strip().splitlines()[-1], line] if x])
         Printer.print_error(line)
@@ -71,13 +69,14 @@ class PluginManager(Printer):
         self._loaded_plugins = {}
         self._loaded_category = {}
         self._params = {}
+        self._history = []
         self._current = None
-        self._fwk_info = {'author': 'codep', 'version': '1.0'}
+        self._fwk_info = {'Author': 'codep', 'Version': '1.6.0'}
         self._base_params = {}
 
     def _load_plugin(self, dirpath, filename):
         plug_name = filename.split('.')[0]
-        plug_dispname = '/'.join(re.split('/plugins/', dirpath)[-1].split('/') + [plug_name])
+        plug_dispname = '/'.join(dirpath.split('/plugins/')[-1].split('/') + [plug_name])
         plug_loadname = plug_dispname.replace('/', '_')
         plug_loadpath = os.path.join(dirpath, filename)
         plug_file = open(plug_loadpath)
@@ -136,6 +135,7 @@ class PluginManager(Printer):
         trying also to retrieve some basic info from the system
         """
         self._load_plugins()
+        self._fwk_info['Loaded plugins'] = len(self._loaded_plugins)
         print('')
         print(' {}Creak v1.6.0{}'.format(BOLD, N))
         print(' =======================================\n')
