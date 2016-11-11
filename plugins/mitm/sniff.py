@@ -22,7 +22,7 @@ import pcap
 import dpkt
 from socket import inet_ntoa
 from struct import unpack
-from baseplugin import BasePlugin
+from creak.baseplugin import BasePlugin
 import creak.utils as utils
 
 class Plugin(BasePlugin):

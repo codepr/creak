@@ -23,7 +23,7 @@ from threading import Thread
 from socket import socket, PF_PACKET, SOCK_RAW
 import pcap
 import dpkt
-from baseplugin import BasePlugin
+from creak.baseplugin import BasePlugin
 import creak.utils as utils
 import creak.config as config
 

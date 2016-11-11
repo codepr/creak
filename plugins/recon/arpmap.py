@@ -23,7 +23,7 @@ from threading import Thread, Timer
 import sys
 import pcap
 import dpkt
-from baseplugin import BasePlugin
+from creak.baseplugin import BasePlugin
 import creak.utils as utils
 
 class Plugin(BasePlugin):

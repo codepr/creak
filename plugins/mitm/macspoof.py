@@ -29,7 +29,7 @@ if sys.version_info < (3, 0):
 else:
     import urllib.request
 
-from baseplugin import BasePlugin
+from creak.baseplugin import BasePlugin
 import creak.utils as utils
 import creak.config as config
 

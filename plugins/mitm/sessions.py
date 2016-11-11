@@ -25,7 +25,7 @@ import pcap
 import dpkt
 import creak.config as config
 import creak.utils as utils
-from baseplugin import BasePlugin
+from creak.baseplugin import BasePlugin
 
 (G, W, R) = (utils.G, utils.W, utils.R)
 

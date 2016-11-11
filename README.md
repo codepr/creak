@@ -1,9 +1,11 @@
 # creak
 
-Deny navigation and download capabilities of a target host in the local network
-performing an ARP poison attack and sending reset TCP packets to every request
-made to the router.
-Born as a didactic project for learning python language, i decline every responsibility for any abuse.
+Perform some MITM attacks to a range of addresses. Among these, deny navigation
+and download capabilities of a target host in the local network performing an
+ARP poison attack and sending reset TCP packets to every request made to the
+router.
+Born as a didactic project for learning python language, i decline every
+responsibility for any abuse or illegal uses.
 
 ## Installation
 

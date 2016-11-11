@@ -96,25 +96,27 @@ class PluginManager(Printer):
         self._loaded_categories = {}
         # crawl the plugin directory
         for path in [os.path.join(x, PLUGINS_DIR[1:-1]) for x in (self._app_path,
-                                                          self._app_path)]:
+                                                                  self._app_path)]:
             for dirpath, dirnames, filenames in os.walk(path):
                 # remove hidden files and directories
-                filenames = [f for f in filenames if not f[0] == '.']
-                dirnames[:] = [d for d in dirnames if not d[0] == '.']
+                filenames = [f for f in filenames if f[0] != '.']
+                dirnames[:] = [d for d in dirnames if d[0] != '.']
                 if len(filenames) > 0:
                     for filename in [f for f in filenames if f.endswith('.py')]:
                         is_loaded = self._load_plugin(dirpath, filename)
                         plug_category = 'disabled'
                         if is_loaded:
                             plug_category = re.search(PLUGINS_DIR + '([^/]*)', dirpath).group(1)
-                        # store the resulting categories statistics
+                        # store the resulting category if not already memorized
                         if plug_category not in self._loaded_categories:
                             self._loaded_categories[plug_category] = [filename]
+                        # add plugin to the list of his category
                         elif filename not in self._loaded_categories[plug_category]:
                             self._loaded_categories[plug_category].append(filename)
 
     def _validate_params(self):
         for param in self._current.required_params:
+            # fallback parameters not set with auto detected if any
             if self._current.required_params[param] and param not in self._params and param in self._base_params:
                 self._params[param] = self._base_params[param]
             elif self._current.required_params[param] and param not in self._params:

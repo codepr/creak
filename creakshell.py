@@ -102,6 +102,18 @@ class CreakShell(PluginManager, Cmd):
         self.prompt = self._prompt_template % (self.prompt[6:11],
                                                plug_dispname.split('/')[-1])
 
+    def do_reload(self, args):
+        """ Reload all plugins of the framework """
+        # clean out all instance dicts
+        self._loaded_plugins = {}
+        self._params = {}
+        self._loaded_categories = {}
+        # unload an eventually loaded plugin
+        self.do_unload(args)
+        self._load_plugins()
+        self._fwk_info['Loaded plugins'] = len(self._loaded_plugins)
+
+
     def do_unload(self, args):
         """ Unload current plugin if in a non-base context """
         if self._current is not None:
@@ -271,9 +283,8 @@ class CreakShell(PluginManager, Cmd):
 
     do_use = do_load
     do_showparams = do_recap
-    do_prev = do_previous
-    do_exit = do_quit
-    do_q = do_quit
+    do_prev = do_back = do_previous
+    do_exit = do_q = do_quit
 
 if __name__ == '__main__':
     CREAK_PROMPT = CreakShell()

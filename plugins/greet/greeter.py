@@ -1,5 +1,5 @@
 
-from baseplugin import BasePlugin
+from creak.baseplugin import BasePlugin
 
 class Plugin(BasePlugin):
 

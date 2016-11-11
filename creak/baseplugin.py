@@ -18,11 +18,8 @@
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
 # USA
 
-import sys
-import re
 from creak.pluginmanager import Printer
 from creak.utils import N, W, BOLD
-
 
 class Parameters(dict):
 
@@ -41,6 +38,11 @@ class Parameters(dict):
             self.__setitem__(arg, kwargs[arg])
 
 class BasePlugin(Printer):
+
+    """
+    Base plugin class, can be considered as an abstract class to be extendend
+    to actually implement a new plugin
+    """
 
     def __init__(self, args):
         self._plugin_name = args
