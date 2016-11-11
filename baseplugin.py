@@ -21,15 +21,8 @@
 import sys
 import re
 from creak.pluginmanager import Printer
+from creak.utils import N, W, BOLD
 
-N = '\033[m' # native
-R = '\033[31m' # red
-G = '\033[32m' # green
-O = '\033[33m' # orange
-B = '\033[34m' # blue
-C = '\033[36m' # cyan
-W = '\033[97m' # white
-BOLD = '\033[1m'
 
 class Parameters(dict):
 

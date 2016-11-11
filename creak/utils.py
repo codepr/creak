@@ -44,12 +44,13 @@ from scapy.all import ARP, Ether, srp
 import creak.config as config
 
 # console colors
-N = '\033[m' # native
+N = '\033[m'   # native
 R = '\033[31m' # red
 G = '\033[32m' # green
 O = '\033[33m' # orange
 B = '\033[34m' # blue
 C = '\033[36m' # cyan
+U = '\033[4m'  # underlined
 W = '\033[97m' # white
 BOLD = '\033[1m'
 

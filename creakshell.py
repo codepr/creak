@@ -25,16 +25,8 @@ import threading
 from cmd import Cmd
 from creak.pluginmanager import PluginManager
 import creak.utils as utils
+from creak.utils import N, R, G, B, W, BOLD
 
-N = '\033[m'   # native
-R = '\033[31m' # red
-G = '\033[32m' # green
-O = '\033[33m' # orange
-B = '\033[34m' # blue
-C = '\033[36m' # cyan
-W = '\033[97m' # white
-U = '\033[4m'  # underlined
-BOLD = '\033[1m'
 
 class CreakShell(PluginManager, Cmd):
 
@@ -244,12 +236,14 @@ class CreakShell(PluginManager, Cmd):
         """ List all loaded plugins and informations of them """
         print('')
         self.print_output('Loaded plugins:\n')
-        for category in sorted(self._loaded_category):
+        for category in sorted(self._loaded_categories):
             if category != 'disabled':
-                print(' + {}{}({}){}'.format(G, category, len(self._loaded_category[category]), N))
+                print(' + {}{}({}){}'.format(G, category,
+                                             len(self._loaded_categories[category]), N))
             else:
-                print(' - {}{}({}){}'.format(R, category, len(self._loaded_category[category]), N))
-            for plugin in self._loaded_category[category]:
+                print(' - {}{}({}){}'.format(R, category,
+                                             len(self._loaded_categories[category]), N))
+            for plugin in self._loaded_categories[category]:
                 if category != 'disabled':
                     print('     + {}{}{}'.format(G, plugin, N))
                 else:

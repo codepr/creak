@@ -25,16 +25,9 @@ import imp
 import traceback
 import subprocess
 import creak.utils as utils
+from creak.utils import B, N, R, G, W, U, O, BOLD
 
-N = '\033[m'   # native
-R = '\033[31m' # red
-G = '\033[32m' # green
-O = '\033[33m' # orange
-B = '\033[34m' # blue
-C = '\033[36m' # cyan
-W = '\033[97m' # white
-U = '\033[4m'  # underlined
-BOLD = '\033[1m'
+PLUGINS_DIR = '/plugins/'
 
 class Printer(object):
 
@@ -53,12 +46,12 @@ class Printer(object):
         if not re.search('[.,;!?]$', line):
             line += '.'
         line = line[:1].upper() + line[1:]
-        print('%s%s[!] %s%s' % (U, R, line, N))
+        print('{}{}[!] {}{}'.format(U, R, line, N))
 
     @staticmethod
     def print_output(line):
         """ Display formatted output """
-        print('%s[*]%s %s' % (C, N, line))
+        print('{}[*]{} {}'.format(B, N, line))
 
 class PluginManager(Printer):
 
@@ -67,7 +60,7 @@ class PluginManager(Printer):
     def __init__(self, path):
         self._app_path = path
         self._loaded_plugins = {}
-        self._loaded_category = {}
+        self._loaded_categories = {}
         self._params = {}
         self._history = []
         self._current = None
@@ -76,7 +69,7 @@ class PluginManager(Printer):
 
     def _load_plugin(self, dirpath, filename):
         plug_name = filename.split('.')[0]
-        plug_dispname = '/'.join(dirpath.split('/plugins/')[-1].split('/') + [plug_name])
+        plug_dispname = '/'.join(dirpath.split(PLUGINS_DIR)[-1].split('/') + [plug_name])
         plug_loadname = plug_dispname.replace('/', '_')
         plug_loadpath = os.path.join(dirpath, filename)
         plug_file = open(plug_loadpath)
@@ -100,9 +93,9 @@ class PluginManager(Printer):
         return False
 
     def _load_plugins(self):
-        self._loaded_category = {}
-        # crawl the plugin directory and build the module tree
-        for path in [os.path.join(x, 'plugins') for x in (self._app_path,
+        self._loaded_categories = {}
+        # crawl the plugin directory
+        for path in [os.path.join(x, PLUGINS_DIR[1:-1]) for x in (self._app_path,
                                                           self._app_path)]:
             for dirpath, dirnames, filenames in os.walk(path):
                 # remove hidden files and directories
@@ -113,12 +106,12 @@ class PluginManager(Printer):
                         is_loaded = self._load_plugin(dirpath, filename)
                         plug_category = 'disabled'
                         if is_loaded:
-                            plug_category = re.search('/plugins/([^/]*)', dirpath).group(1)
-                        # store the resulting category statistics
-                        if not plug_category in self._loaded_category:
-                            self._loaded_category[plug_category] = [filename]
-                        elif filename not in self._loaded_category[plug_category]:
-                            self._loaded_category[plug_category].append(filename)
+                            plug_category = re.search(PLUGINS_DIR + '([^/]*)', dirpath).group(1)
+                        # store the resulting categories statistics
+                        if plug_category not in self._loaded_categories:
+                            self._loaded_categories[plug_category] = [filename]
+                        elif filename not in self._loaded_categories[plug_category]:
+                            self._loaded_categories[plug_category].append(filename)
 
     def _validate_params(self):
         for param in self._current.required_params:
@@ -136,6 +129,7 @@ class PluginManager(Printer):
         """
         self._load_plugins()
         self._fwk_info['Loaded plugins'] = len(self._loaded_plugins)
+        # print basic banner
         print('')
         print(' {}Creak v1.6.0{}'.format(BOLD, N))
         print(' =======================================\n')
@@ -146,30 +140,31 @@ class PluginManager(Printer):
         print(' Successfully loaded %s plugins ' % len(self._loaded_plugins))
         print(' Categories:\n')
         print(' ---------------------------------------\n')
-        for category in sorted(self._loaded_category):
+        # list loaded plugins
+        for category in sorted(self._loaded_categories):
             if category != 'disabled':
-                print(' + {}{}({}){}'.format(G, category, len(self._loaded_category[category]), N))
+                print(' + {}{}({}){}'.format(G, category,
+                                             len(self._loaded_categories[category]), N))
             else:
-                print(' - {}{}({}){}'.format(R, category, len(self._loaded_category[category]), N))
-            for plugin in self._loaded_category[category]:
+                print(' - {}{}({}){}'.format(R, category,
+                                             len(self._loaded_categories[category]), N))
+            for plugin in self._loaded_categories[category]:
                 if category != 'disabled':
                     print('     + {}{}{}'.format(G, plugin, N))
                 else:
                     print('     - {}{}{}'.format(R, plugin, N))
             print('')
-        strs = subprocess.check_output('ip r l'.split())
-        gateway = strs.split('default via')[-1].split()[0]
-        dev = strs.split('dev')[-1].split()[0]
-        localip = strs.split('src')[-1].split()[0]
-        mac_addr = utils.get_mac_by_dev(dev)
-        gateway_addr = utils.get_mac_by_ip(gateway)
-        self._base_params['dev_brand'] = utils.get_dev_brand().lstrip()
-        self._base_params['dev'], self._base_params['gateway'] = dev, gateway
-        self._base_params['localip'], self._base_params['gateway_addr'] = localip, gateway_addr
-        if mac_addr:
-            self._base_params['mac_addr'] = mac_addr
+        # retrieve common informations with ip r l command
+        if os.path.exists("/usr/bin/ip") or os.path.exists("/bin/ip"):
+            iprl = subprocess.check_output('ip r l'.split())
+            self._base_params['gateway'] = iprl.split('default via')[-1].split()[0]
+            self._base_params['dev'] = iprl.split('dev')[-1].split()[0]
+            self._base_params['localip'] = iprl.split('src')[-1].split()[0]
+            self._base_params['mac_addr'] = utils.get_mac_by_dev(self._base_params['dev'])
+            self._base_params['gateway_addr'] = utils.get_mac_by_ip(self._base_params['gateway'])
+            self._base_params['dev_brand'] = utils.get_dev_brand().lstrip()
         print('')
-        print(' Detected some informations\n')
+        print(' Common informations detected\n')
         print(' ---------------------------------------\n')
         for param in sorted(self._base_params):
             print(' {}{:.<12}{}{:.>15}{}{}'.format(BOLD, param, N, W, self._base_params[param], N))
@@ -177,5 +172,6 @@ class PluginManager(Printer):
             print('\n {}Most of the features of creak requires root privileges,\n'
                   ' please reload the framework using sudo or with root privileges{}'.format(O, N))
         print('')
+
         return True
 
