@@ -1,10 +1,11 @@
 # creak
 
-Deny navigation and download capabilities of a target host in the local network
-performing an ARP poison attack and sending reset TCP packets to every request
-made to the router.
+Performs some of the most famous MITM attack on target addresses located in a
+local network. Among these, deny navigation and download capabilities of a
+target host in the local network performing an ARP poison attack and sending
+reset TCP packets to every request made to the router.
 Born as a didactic project for learning python language, I decline every
-responsibility for any abuse or malevolent use of this code.
+responsibility for any abuse, including malevolent or illegal use of this code.
 
 ## Installation
 
@@ -107,8 +108,8 @@ See the [CHANGELOG](CHANGELOG.md) file.
 
 ## TODO
 
-- Complete `Scapy` support
 - Sessions grouping based on active load usage
+- Complete `Scapy` support (**started**)
 - Sessions hijacking (**started**)
 - Port to a micro-framework wih plugin architecture (**started**)
 
