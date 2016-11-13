@@ -1,0 +1,18 @@
+[output]
+DEBUG   = False
+VERBOSE = False
+ENGINE  = scapy
+
+[services]
+IP_FORWARD       = /proc/sys/net/ipv4/ip_forward
+MANUFACTURER_URL = http://anonsvn.wireshark.org/wireshark/trunk/manuf
+
+[restart]
+# NETWORK_RESTART = /etc/init.d/networking
+# NETWORK_RESTART = service networking
+# NETWORK_RESTART = service network-manager
+# NETWORK_RESTART = /etc/init.d/network
+# NETWORK_RESTART = service network
+# NETWORK_RESTART = /etc/rc.d/rc.init1
+# NETWORK_RESTART = /etc/rc.d/rc.networkmanager
+NETWORK_RESTART = systemctl restart systemd-networkd.service

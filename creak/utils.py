@@ -29,7 +29,9 @@ import subprocess
 import struct
 import fcntl
 
-if sys.version_info < (3, 0):
+IS_PY2 = sys.version_info < (3, 0)
+
+if IS_PY2:
     import urllib2
 else:
     import urllib.request
@@ -41,7 +43,9 @@ except ImportError:
     print("[!] Missing modules dpkt or ConfigParser")
 from socket import socket, inet_aton, inet_ntoa, AF_INET, SOCK_DGRAM
 from scapy.all import ARP, Ether, srp
-import creak.config as config
+
+CONF = ConfigParser.ConfigParser()
+CONF.read(r'creak/config')
 
 # console colors
 W = '\033[0m'  # white (normal)
@@ -68,10 +72,11 @@ def binary_to_string(binary):
 
 def set_ip_forward(fwd):
     """ set ip_forward to fwd (0 or 1) """
+    CONF.read(r'./config')
     if fwd != 1 and fwd != 0:
         raise ValueError('[.] Value not valid for ip_forward, must be either 0 or 1')
     else:
-        with open(config.IP_FORWARD, 'w') as ip_f:
+        with open(CONF.get('services', 'IP_FORWARD'), 'w') as ip_f:
             ip_f.write(str(fwd) + '\n')
 
 def get_default_gateway_linux():
@@ -164,10 +169,10 @@ def change_mac(dev, new_mac):
         # turn on device
         subprocess.check_call(["ifconfig", "%s" % dev, "up"])
         # restart network
-        if config.NETWORK_RESTART == config.SYSTEMD_NETWORK:
-            subprocess.check_call([config.NETWORK_RESTART])
+        if CONF.get('restart', 'NETWORK_RESTART').startswith('systemctl'):
+            subprocess.check_call([CONF.get('restart', 'NETWORK_RESTART')])
         else:
-            subprocess.check_call([config.NETWORK_RESTART, "restart"])
+            subprocess.check_call([CONF.get('restart', 'NETWORK_RESTART'), "restart"])
 
 def eth_ntoa(buf):
     """ convert a MAC address from binary packed bytes to string format """
@@ -213,7 +218,7 @@ def get_manufacturer(manufacturer):
     output, m_list = [], None
     url_lib = None
 
-    if sys.version_info < (3, 0):
+    if IS_PY2:
         url_lib = urllib2
     else:
         url_lib = urllib.request
@@ -225,7 +230,7 @@ def get_manufacturer(manufacturer):
         print("[+] No local cache data found for " + G + manufacturer + W
               + " found, fetching from web..")
         try:
-            urls = url_lib.urlopen(config.MANUFACTURER_URL)
+            urls = url_lib.urlopen(CONF.get('services', 'MANUFACTURER_URL'))
             m_list = open("./manufacturers/list.txt", "w+")
 
             for line in urls:
@@ -235,7 +240,7 @@ def get_manufacturer(manufacturer):
                     if re.search(manufacturer.lower(),
                                  man.lower()) and len(mac) < 17 and len(mac) > 1:
                         # python2.x ignore byte string b''
-                        if sys.version_info < (3, 0):
+                        if IS_PY2:
                             output.append(mac)
                         else:
                             output.append(mac.decode('utf-8'))
@@ -257,7 +262,7 @@ def get_manufacturer(manufacturer):
                       + " device")
                 return macs
         except:
-            urls = url_lib.urlopen(config.MANUFACTURER_URL)
+            urls = url_lib.urlopen(CONF.get('services', 'MANUFACTURER_URL'))
             m_list = open("./manufacturers/list.txt", "a+")
 
             for line in urls:
@@ -267,7 +272,7 @@ def get_manufacturer(manufacturer):
                     if re.search(manufacturer.lower(),
                                  man.lower()) and len(mac) < 17 and len(mac) > 1:
                         # python2.x ignore byte string b''
-                        if sys.version_info < (3, 0):
+                        if IS_PY2:
                             output.append(mac)
                         else:
                             output.append(mac.decode('utf-8'))
