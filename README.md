@@ -23,9 +23,10 @@ $ git clone https://github.com/codepr/creak.git
 
 It is required to have installed `pcap` libraries for raw packet manipulations
 and `dpkt` module, for dns spoofing options is required to have installed dnet
-module from `libdnet` package, do not confuse it with pydnet (network evaluation
-tool) module.
-It can use also `scapy` if desired, can just be set in the `config.py` file.
+module from `libdnet` package, do not confuse it with pydnet (network
+evaluation tool) module.
+It can use also `scapy` if desired, can just be set in the `config` file at the
+section `[output]` > `ENGINE`.
 
 ## Options
 
@@ -111,7 +112,7 @@ See the [CHANGELOG](CHANGELOG.md) file.
 - Sessions grouping based on active load usage
 - Complete `Scapy` support (**started**)
 - Sessions hijacking (**started**)
-- Port to a micro-framework wih plugin architecture (**started**)
+- Port to a micro-framework wih plugin architecture (**75% completed**)
 
 ## License
 

@@ -1,3 +1,14 @@
+#### 1.0.3 - 2016-11-16
+
+##### Added
+
+- Scapy dns spoof method
+
+##### Changed
+
+- fixed minor bugs and removed `config.py` in favor of a more idiomatic
+  configuration system.
+
 #### 1.0.2 - 2016-11-01
 
 - Evaluating the possibility of transforming `creak` in a micro-framework using
