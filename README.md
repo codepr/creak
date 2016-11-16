@@ -1,10 +1,11 @@
 # creak
 
-Perform some MITM attacks to a range of addresses. Among these, deny navigation
-and download capabilities of a target host in the local network performing an
-ARP poison attack and sending reset TCP packets to every request made to the
-router.
-Born as a didactic project for learning python language, i decline every
+Basic plugin-defined architecture to automate some MITM attacks on a LAN
+context, with support for easy addition of new plugin or extension of the
+current ones. Among these, poison, spoofing and deny navigation and download
+capabilities of a target host in the local network performing an ARP poison
+attack and sending reset TCP packets to every request made to the router.
+Born as a didactic project for learning python language, I decline every
 responsibility for any abuse or illegal uses.
 
 ## Installation
