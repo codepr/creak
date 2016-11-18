@@ -29,6 +29,11 @@ import subprocess
 import struct
 import fcntl
 
+try:
+    xrange
+except NameError:
+    xrange = range
+
 IS_PY2 = sys.version_info < (3, 0)
 
 if IS_PY2:

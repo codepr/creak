@@ -46,6 +46,11 @@ except ImportError:
     print("[!] Missing module dnet, DNS spoofing (-2 options) won't work")
 import creak.utils as utils
 
+try:
+    xrange
+except NameError:
+    xrange = range
+
 
 (G, W, R) = (utils.G, utils.W, utils.R)
 
