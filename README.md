@@ -8,7 +8,7 @@ attack and sending reset TCP packets to every request made to the router.
 Born as a didactic project for learning python language, I decline every
 responsibility for any abuse or illegal uses.
 
-[![demo](https://asciinema.org/a/10eyg4vz9hmisqz5xaz51opzy)](https://asciinema.org/a/10eyg4vz9hmisqz5xaz51opzy?autoplay=1)
+[![demo](https://asciinema.org/a/10eyg4vz9hmisqz5xaz51opzy.png)](https://asciinema.org/a/10eyg4vz9hmisqz5xaz51opzy?autoplay=1)
 
 ## Installation
 
