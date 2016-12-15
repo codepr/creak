@@ -1,3 +1,4 @@
+# greeter plugin sample
 
 from creak.baseplugin import BasePlugin
 

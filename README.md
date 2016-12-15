@@ -8,6 +8,8 @@ attack and sending reset TCP packets to every request made to the router.
 Born as a didactic project for learning python language, I decline every
 responsibility for any abuse or illegal uses.
 
+[![demo](https://asciinema.org/a/10eyg4vz9hmisqz5xaz51opzy)](https://asciinema.org/a/10eyg4vz9hmisqz5xaz51opzy?autoplay=1)
+
 ## Installation
 
 ```sh
@@ -28,32 +30,35 @@ module from `libdnet` package, do not confuse it with pydnet (network evaluation
 tool) module.
 It can use also `scapy` if desired, can just be set in the `config.py` file.
 
-## Options
+## Extending
 
-```sh
-Usage: creak.py [options] dev
+To add a plugin to the framework it is required to just extend base class `baseplugin.py` and define
+the method `run` according to the parameters needed, and the informations of the
+plugin in the `init_plugin` method, including the privilege level needed.
 
-Options:
-  -h, --help           show this help message and exit
-  -1, --sessions-scan  Sessions scan mode
-  -2, --dns-spoof      Dns spoofing
-  -x, --spoof          Spoof mode, generate a fake MAC address to be used
-                       during attack
-  -m MACADDR           Mac address octet prefix (could be an entire MAC
-                       address in the form AA:BB:CC:DD:EE:FF)
-  -M MANUFACTURER      Manufacturer of the wireless device, for retrieving a
-                       manufactur based prefix for MAC spoof
-  -s SOURCE            Source ip address (e.g. a class C address like
-                       192.168.1.150) usually the router address
-  -t TARGET            Target ip address (e.g. a class C address like
-                       192.168.1.150), can be specified multiple times
-  -p PORT              Target port to shutdown
-  -a HOST              Target host that will be redirect while navigating on
-                       target machine
-  -r REDIR             Target redirection that will be fetched instead of host
-                       on the target machine
-  -v, --verbose        Verbose output mode
-  -d, --dotted         Dotted output mode
+### Example - greeter.py
+
+```python
+# greeter plugin sample
+
+from creak.baseplugin import BasePlugin
+
+class Plugin(BasePlugin):
+
+    """ A plugin that doesn't do much, hust greet the user """
+
+    def init_plugin(self):
+        self._set_info(
+            author='codep',
+            version='1.0',
+            description='Greets the user')
+        self._set_required_params(name=False)
+
+    def run(self, kwargs):
+        """ I don't do a lot """
+        if 'name' not in kwargs:
+            kwargs['name'] = 'stranger'
+        print("Hello %s" % kwargs['name'])
 ```
 
 ## Changelog
