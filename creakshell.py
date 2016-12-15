@@ -285,8 +285,3 @@ class CreakShell(PluginManager, Cmd):
     do_showparams = do_recap
     do_prev = do_back = do_previous
     do_exit = do_q = do_quit
-
-if __name__ == '__main__':
-    CREAK_PROMPT = CreakShell()
-    CREAK_PROMPT.init_framework()
-    CREAK_PROMPT.cmdloop()
