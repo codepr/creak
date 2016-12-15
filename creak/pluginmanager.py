@@ -64,7 +64,7 @@ class PluginManager(Printer):
         self._params = {}
         self._history = []
         self._current = None
-        self._fwk_info = {'Author': 'codep', 'Version': '1.6.0'}
+        self._fwk_info = {'Author': 'codep', 'Version': '1.2.0'}
         self._base_params = {}
 
     def _load_plugin(self, dirpath, filename):
@@ -74,7 +74,7 @@ class PluginManager(Printer):
         plug_loadpath = os.path.join(dirpath, filename)
         plug_file = open(plug_loadpath)
         try:
-            # import the plugin into memory
+            # load the plugin into memory
             imp.load_source(plug_loadname, plug_loadpath, plug_file)
             __import__(plug_loadname)
             # add the plugin to the framework's loaded plugins
@@ -95,6 +95,7 @@ class PluginManager(Printer):
     def _load_plugins(self):
         self._loaded_categories = {}
         # crawl the plugin directory
+        # there must be a 'plugins' directory containing all plugins categories
         for path in [os.path.join(x, PLUGINS_DIR[1:-1]) for x in (self._app_path,
                                                                   self._app_path)]:
             for dirpath, dirnames, filenames in os.walk(path):
@@ -134,27 +135,24 @@ class PluginManager(Printer):
         # print basic banner
         print('')
         print(' {}Creak v1.6.0{}'.format(BOLD, N))
-        print(' =======================================\n')
-        print(' Author: Andrea Giacomo Baldan')
-        print('         a.g.baldan@gmail.com')
-        print('         https://github.com/codepr\n')
-        print(' ---------------------------------------\n')
+        print(' {}Author:{} codep - https://github.com/codepr'.format(BOLD, N))
+        print(' =========================================\n')
         print(' Successfully loaded %s plugins ' % len(self._loaded_plugins))
-        print(' Categories:\n')
-        print(' ---------------------------------------\n')
+        print(' Categories:')
+        print(' -----------------------------------------\n')
         # list loaded plugins
         for category in sorted(self._loaded_categories):
             if category != 'disabled':
-                print(' + {}{}({}){}'.format(G, category,
+                print(' + {}{}({}){}'.format(G, category.upper(),
                                              len(self._loaded_categories[category]), N))
             else:
-                print(' - {}{}({}){}'.format(R, category,
+                print(' - {}{}({}){}'.format(R, category.upper(),
                                              len(self._loaded_categories[category]), N))
             for plugin in self._loaded_categories[category]:
                 if category != 'disabled':
-                    print('     + {}{}{}'.format(G, plugin, N))
+                    print('     + {}{}{}'.format(G, plugin.split('.')[0], N))
                 else:
-                    print('     - {}{}{}'.format(R, plugin, N))
+                    print('     - {}{}{}'.format(R, plugin.split('.')[0], N))
             print('')
         # retrieve common informations with ip r l command
         if os.path.exists("/usr/bin/ip") or os.path.exists("/bin/ip"):
@@ -166,8 +164,8 @@ class PluginManager(Printer):
             self._base_params['gateway_addr'] = utils.get_mac_by_ip(self._base_params['gateway'])
             self._base_params['dev_brand'] = utils.get_dev_brand().lstrip()
         print('')
-        print(' Common informations detected\n')
-        print(' ---------------------------------------\n')
+        print(' COMMON INFORMATIONS DETECTED')
+        print(' -----------------------------------------\n')
         for param in sorted(self._base_params):
             print(' {}{:.<12}{}{:.>15}{}{}'.format(BOLD, param, N, W, self._base_params[param], N))
         if os.getuid() != 0:

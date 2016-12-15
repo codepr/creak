@@ -56,61 +56,14 @@ Options:
   -d, --dotted         Dotted output mode
 ```
 
-## Example
-
-Most basic usage:
-Deny all traffic to the target host
-
-```sh
-$ python creak.py -t 192.168.1.30 wlan0
-```
-
-Set a different gateway:
-
-```sh
-$ python creak.py -s 192.168.1.2 -t 192.168.1.30 wlan0
-```
-
-Set a different mac address for the device:
-
-```sh
-$ python creak.py -m 00:11:22:33:44:55 -t 192.168.1.30 wlan0
-```
-
-Spoof mac address generating a fake one:
-
-```sh
-$ python creak.py -x -t 192.168.1.30 wlan0
-```
-
-Spoof mac address generating one based on manufacturer(e.g Xeros):
-
-```sh
-$ python creak.py -x -M xeros -t 192.168.1.30 wlan0
-```
-
-DNS spoofing using a fake MAC address, redirecting ab.xy to cd.xz(e.g.
-		localhost):
-
-```sh
-$ python creak.py -x -M xeros -t 192.168.1.30 -a www.ab.xy -r www.cd.xz wlan0
-```
-
-Deny multiple hosts in the subnet:
-
-```sh
-$ python creak.py -x -t 192.168.1.30 -t 192.168.1.31 -t 192.168.1.32 wlan0
-```
-
 ## Changelog
 
 See the [CHANGELOG](CHANGELOG.md) file.
 
 ## TODO
 
+- Parametrized run
 - Complete `Scapy` support
-- Sessions grouping based on active load usage
-- Sessions hijacking
 
 ## License
 
