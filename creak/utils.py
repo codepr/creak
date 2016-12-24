@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2014-2016 Andrea Baldan
+# Copyright (c) 2014-2017 Andrea Baldan
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License as
