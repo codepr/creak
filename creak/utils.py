@@ -43,11 +43,17 @@ else:
 
 try:
     import dpkt
+except ImportError:
+    print("[!] Missing module dpkt")
+
+try:
     import ConfigParser
 except ImportError:
-    print("[!] Missing modules dpkt or ConfigParser")
+    print("[!] Missing module ConfigParser")
+
 from socket import socket, inet_aton, inet_ntoa, AF_INET, SOCK_DGRAM
 from scapy.all import ARP, Ether, srp
+# from configparser import ConfigParser
 
 CONF = ConfigParser.ConfigParser()
 CONF.read(r'creak/config')
