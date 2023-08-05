@@ -189,11 +189,7 @@ def eth_ntoa(buf):
     """ convert a MAC address from binary packed bytes to string format """
     mac_addr = ''
     for intval in struct.unpack('BBBBBB', buf):
-        if intval > 15:
-            replacestr = '0x'
-        else:
-            replacestr = 'x'
-            mac_addr = ''.join([mac_addr, hex(intval).replace(replacestr, '')])
+        mac_addr = ''.join([mac_addr, hex(intval).replace('0x' if intval > 15 else 'x', '')])
 
     return mac_addr
 
@@ -204,12 +200,10 @@ def eth_aton(buf):
         addr = ''.join([addr, struct.pack('B', int(buf[i: i + 2], 16))],)
     return addr
 
-def build_arp_packet(source_mac, src=None, dst=None):
+def build_arp_packet(source_mac, src, dst):
     """ forge arp packets used to poison and reset target connection """
     arp = dpkt.arp.ARP()
     packet = dpkt.ethernet.Ethernet()
-    if not src or not dst:
-        return False
     arp.sha = string_to_binary(source_mac)
     arp.spa = inet_aton(dst)
     arp.tha = '\x00' * 6
@@ -227,12 +221,7 @@ def get_manufacturer(manufacturer):
     http://anonsvn.wireshark.org/wireshark/trunk/manuf
     """
     output, m_list = [], None
-    url_lib = None
-
-    if IS_PY2:
-        url_lib = urllib2
-    else:
-        url_lib = urllib.request
+    url_lib = urllib2 if IS_PY2 else urllib.request
 
     if not os.path.exists("./manufacturers"):
         os.makedirs("./manufacturers")
@@ -240,63 +229,40 @@ def get_manufacturer(manufacturer):
     if not os.path.isfile("./manufacturers/list.txt"):
         print("[+] No local cache data found for " + G + manufacturer + W
               + " found, fetching from web..")
-        try:
-            urls = url_lib.urlopen(CONF.get('services', 'MANUFACTURER_URL'))
-            m_list = open("./manufacturers/list.txt", "w+")
-
-            for line in urls:
-                try:
-                    mac = line.split()[0]
-                    man = line.split()[1]
-                    if re.search(manufacturer.lower(),
-                                 man.lower()) and len(mac) < 17 and len(mac) > 1:
-                        # python2.x ignore byte string b''
-                        if IS_PY2:
-                            output.append(mac)
-                        else:
-                            output.append(mac.decode('utf-8'))
-                except IndexError:
-                    pass
-        except:
-            print("[!] Error occured while trying to fetch data for manufacturer based mac address")
-
+        urls = url_lib.urlopen(CONF.get('services', 'MANUFACTURER_URL'))
+        macs = _manufacturers(manufacturer, urls)
     else:
-        macs = []
         print("[+] Fetching data from local cache..")
         conf = ConfigParser.ConfigParser()
         conf.read("./manufacturers/list.txt")
 
-        try:
-            macs = conf.get(manufacturer.lower(), 'MAC').split(',')
-            if len(macs) > 0:
-                print("[+] Found mac octets from local cache for " + G + manufacturer + W
-                      + " device")
-                return macs
-        except:
+        macs = conf.get(manufacturer.lower(), 'MAC').split(',')
+        if len(macs) > 0:
+            print("[+] Found mac octets from local cache for " + G + manufacturer + W
+                  + " device")
+            return macs
+        else:
             urls = url_lib.urlopen(CONF.get('services', 'MANUFACTURER_URL'))
-            m_list = open("./manufacturers/list.txt", "a+")
+            macs = _manufacturers(manufacturer, urls)
 
-            for line in urls:
-                try:
-                    mac = line.split()[0]
-                    man = line.split()[1]
-                    if re.search(manufacturer.lower(),
-                                 man.lower()) and len(mac) < 17 and len(mac) > 1:
-                        # python2.x ignore byte string b''
-                        if IS_PY2:
-                            output.append(mac)
-                        else:
-                            output.append(mac.decode('utf-8'))
+    with open("./manufacturers/list.txt", "wa+") as m_list:
+        m_list.write("[" + manufacturer.lower() + "]\nMAC = ")
+        m_list.write(",".join(macs))
+        m_list.write("\n")
 
-                except IndexError:
-                    pass
+    return macs
 
-    m_list.write("[" + manufacturer.lower() + "]\nMAC = ")
-    m_list.write(",".join(output))
-    m_list.write("\n")
-    m_list.close()
+def _manufacturers(manufacturer, urls):
+    [_get_mac(manufacturer, line) for line in urls]
 
-    return output
+def _get_mac(manufacturer, line):
+    addr = line.split()
+    if len(addr) < 1:
+        continue
+    mac, man = addr
+    if re.search(manufacturer.lower(), man.lower()) and 1 < len(mac) < 17:
+        # python2.x ignore byte string b''
+        return (mac if IS_PY2 else mac.decode('utf-8'))
 
 def is_ipv4(ipstring):
     """ check if the given string is an ipv4"""
